@@ -1,0 +1,60 @@
+{% extends "admin/base.html" %} {% block title %}{{ title }}{% endblock %} {% block page_title %}{{ page_title }}{%
+endblock %} {% block page_subtitle %}{{ page_subtitle }}{% endblock %} {% block content %}
+<div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-gray-200">
+  <h3 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-3">
+    {% if 'Tambah' in title %}
+    <i class="fas fa-plus-circle text-purple-600 mr-2"></i> Tambah Kontak Baru {% else %}
+    <i class="fas fa-edit text-purple-600 mr-2"></i> Edit Data Kontak {% endif %}
+  </h3>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-4">
+      {{ form.instansi.label(class="block text-gray-700 text-sm font-bold mb-2") }} {{ form.instansi(class="shadow
+      appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2
+      focus:ring-purple-500 transition-shadow", placeholder="Contoh: Pemadam Kebakaran") }} {% for error in
+      form.instansi.errors %}
+      <p class="text-red-500 text-xs italic mt-1">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="mb-4">
+      {{ form.nomor_telp.label(class="block text-gray-700 text-sm font-bold mb-2") }} {{ form.nomor_telp(class="shadow
+      appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2
+      focus:ring-purple-500 transition-shadow", placeholder="Contoh: 628xxxxxx") }} {% for error in
+      form.nomor_telp.errors %}
+      <p class="text-red-500 text-xs italic mt-1">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="flex items-center justify-between">
+      {{ form.submit(class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg
+      transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2
+      cursor-pointer") }}
+      <a
+        href="{{ url_for('admin.nomor') }}"
+        class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800 transition-colors"
+        >Batal</a
+      >
+    </div>
+  </form>
+</div>
+
+<script>
+  // Live update ikon preview
+  document.addEventListener('DOMContentLoaded', function () {
+    const iconInput = document.getElementById('icon');
+    const iconPreview = document.getElementById('icon-preview');
+
+    if (iconInput && iconPreview) {
+      // Update saat input berubah
+      iconInput.addEventListener('input', function () {
+        iconPreview.className = this.value || 'fas fa-question-circle';
+      });
+
+      // Atur preview awal jika ada data
+      iconPreview.className = iconInput.value || 'fas fa-question-circle';
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "admin/base.html" %} {% block title %}Pengguna{% endblock %} {% block styles %} {% endblock %} {% block
+page_title %}Pengguna{% endblock %} {% block page_subtitle %}Manajemen Role Pengguna{% endblock %} {#
+============================================== #} {# == BLOK BARU UNTUK NOTIFIKASI DI HEADER == #} {#
+============================================== #} {% block header_extra %}
+{% endblock %} {# <-- 👇👇👇 PERBAIKAN: Tambahkan endblock ini 👇👇👇 #} {#
+============================================== #} {# == AKHIR BLOK HEADER EXTRA == #} {#
+============================================== #} {% block content %}
+<div
+  class="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-wrap justify-between items-center gap-4"
+>
+  <h2 class="text-lg font-semibold text-gray-800">Manajemen Data Pengguna</h2>
+  <div class="mt-4 sm:mt-0">
+    <a
+      href="{{ url_for('admin.add_user') }}"
+      class="bg-purple-medium hover:bg-purple-dark text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 inline-flex items-center space-x-2"
+    >
+      <i class="fas fa-plus"></i>
+      <span>Tambah Pengguna Baru</span>
+    </a>
+  </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead class="bg-gray-50 border-b border-gray-200">
+        <tr>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Username</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Email</th>
+          <th class="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Role</th>
+          <th class="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Aksi</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for user in users %}
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="flex items-center">
+              <div class="w-10 h-10 bg-purple-200 rounded-full flex items-center justify-center mr-4">
+                {% if user.role == 'admin' %}
+                <i class="fas fa-crown text-purple-700"></i>
+                {% else %}
+                <i class="fas fa-user-gear text-purple-700"></i>
+                {% endif %}
+              </div>
+              <span class="font-medium text-gray-900">{{ user.username }}</span>
+            </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-gray-600">{{ user.email }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-center">
+            <span
+              class="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full {% if user.role == 'admin' %} bg-green-100 text-green-800 {% else %} bg-yellow-100 text-yellow-800 {% endif %}"
+            >
+              {{ user.role.capitalize() }}
+            </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+            <div class="flex items-center space-x-3 justify-center">
+              {% if user.id != current_user.id %}
+              <form
+                id="delete-form-{{ user.id }}"
+                action="{{ url_for('admin.delete_user', user_id=user.id) }}"
+                method="POST"
+              >
+                <button
+                  type="button"
+                  class="delete-user-btn text-red-600 hover:text-red-900"
+                  data-user-id="{{ user.id }}"
+                  data-user-username="{{ user.username }}"
+                >
+                  <i class="fas fa-trash-alt"></i> Hapus
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %} {% block scripts %} {{ super() }}
+<script>
+  // Ambil semua tombol dengan class 'delete-user-btn'
+  const deleteUserButtons = document.querySelectorAll('.delete-user-btn');
+
+  // Lakukan perulangan untuk setiap tombol dan tambahkan event listener
+  deleteUserButtons.forEach((button) => {
+    button.addEventListener('click', function (event) {
+      event.preventDefault(); // Mencegah aksi default
+
+      // Ambil data dari atribut data-*
+      const userId = this.dataset.userId;
+      const username = this.dataset.userUsername;
+
+      // Tampilkan SweetAlert konfirmasi
+      Swal.fire({
+        title: 'Apakah Anda Yakin?',
+        text: `Anda akan menghapus user "${username}". Tindakan ini tidak dapat dibatalkan.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Ya, hapus!',
+        cancelButtonText: 'Batal',
+      }).then((result) => {
+        // Jika pengguna mengklik "Ya, hapus!"
+        if (result.isConfirmed) {
+          // Cari form yang sesuai dengan id dan submit
+          document.getElementById(`delete-form-${userId}`).submit();
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

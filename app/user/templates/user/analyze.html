@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analisis CCTV - {{ cctv_info.lokasi }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #0e1222;
+        color: white;
+        font-family: sans-serif;
+      }
+      /* Pastikan stream tidak melebihi tinggi viewport */
+      .stream-wrapper {
+        max-height: calc(100vh - 100px);
+      }
+      .stat-card {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .stat-value {
+        background: linear-gradient(45deg, #10dfb4, #e2562a);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+    </style>
+  </head>
+  <body class="flex flex-col h-full">
+    <header class="bg-[#141B35] border-b border-gray-700 shadow-lg z-10">
+      <div
+        class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center"
+      >
+        <a
+          href="{{ url_for('user.dashboard') }}"
+          class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+        >
+          <svg
+            class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            ></path>
+          </svg>
+          Kembali
+        </a>
+
+        <div class="text-center">
+          <h1 class="text-lg font-bold text-white">Analisis Real-time</h1>
+          <p class="text-sm text-yellow-400">{{ cctv_info.lokasi }}</p>
+        </div>
+
+        <div>
+          <button
+            onclick="toggleFullscreen()"
+            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m0 0v-4m0 4l-5-5"
+              ></path>
+            </svg>
+            Fullscreen
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-grow p-4 lg:p-6">
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
+        <div
+          class="lg:col-span-3 bg-black rounded-lg flex items-center justify-center stream-wrapper"
+        >
+          {% if cctv_info.supports_detection %}
+          <img
+            id="streamImage"
+            src="{{ url_for('user.analyze_stream', camera_idx=camera_idx) }}"
+            alt="CCTV Analysis Stream"
+            class="max-w-full max-h-full object-contain"
+          />
+          {% else %}
+          <div class="text-center text-gray-400">
+            <p class="text-xl font-semibold">Deteksi Tidak Didukung</p>
+            <p>
+              CCTV ini tidak aktif atau tidak memiliki stream URL yang valid.
+            </p>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="lg:col-span-1 flex flex-col gap-4">
+          <div class="bg-[#141B35] p-4 rounded-lg shadow-lg">
+            <h2 class="text-lg font-semibold text-white mb-4">
+              Statistik Real-time
+            </h2>
+            <div class="space-y-3">
+              <div class="stat-card p-4 rounded-lg text-center">
+                <div
+                  class="stat-value text-4xl font-bold"
+                  id="totalCount-analyze"
+                >
+                  0
+                </div>
+                <div class="text-sm text-gray-400 mt-1">Total Deteksi</div>
+              </div>
+              <div class="stat-card p-4 rounded-lg text-center">
+                <div
+                  class="stat-value text-3xl font-bold"
+                  id="personCount-analyze"
+                >
+                  0
+                </div>
+                <div class="text-sm text-gray-400 mt-1">Orang</div>
+              </div>
+              <div class="stat-card p-4 rounded-lg text-center">
+                <div
+                  class="stat-value text-3xl font-bold"
+                  id="carCount-analyze"
+                >
+                  0
+                </div>
+                <div class="text-sm text-gray-400 mt-1">Mobil</div>
+              </div>
+              <div class="stat-card p-4 rounded-lg text-center">
+                <div
+                  class="stat-value text-3xl font-bold"
+                  id="motorcycleCount-analyze"
+                >
+                  0
+                </div>
+                <div class="text-sm text-gray-400 mt-1">Motor</div>
+              </div>
+              <div class="stat-card p-4 rounded-lg text-center">
+                <div
+                  class="stat-value text-3xl font-bold"
+                  id="busCount-analyze"
+                >
+                  0
+                </div>
+                <div class="text-sm text-gray-400 mt-1">Bus</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const CAMERA_IDX = {{ camera_idx }};
+
+      function toggleFullscreen() {
+        const elem = document.documentElement;
+        if (!document.fullscreenElement) {
+            if (elem.requestFullscreen) elem.requestFullscreen();
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+        }
+      }
+
+      function updateStatCards(counts) {
+        if (!counts) return;
+
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+        document.getElementById('totalCount-analyze').textContent = total;
+        document.getElementById('personCount-analyze').textContent = counts.person || 0;
+        document.getElementById('carCount-analyze').textContent = counts.car || 0;
+        document.getElementById('motorcycleCount-analyze').textContent = counts.motorcycle || 0;
+        document.getElementById('busCount-analyze').textContent = counts.bus || 0;
+      }
+
+      function fetchStats() {
+        // Ambil data dari API yang sama dengan yang digunakan dashboard
+        fetch(`/user/api/realtime_stats/${CAMERA_IDX}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('Network response was not ok');
+            }
+            return response.json();
+          })
+          .then(data => {
+            // Di halaman ini, kita bisa langsung percaya data dari backend
+            if (data && data.status === 'success' && data.counts) {
+              updateStatCards(data.counts);
+            }
+          })
+          .catch(error => {
+            console.error("Gagal mengambil data statistik:", error);
+            // Jika error, tampilkan 0
+            updateStatCards({ person: 0, car: 0, motorcycle: 0, bus: 0 });
+          });
+      }
+
+      // Mulai mengambil data setiap 1 detik (1000ms)
+      setInterval(fetchStats, 1000);
+
+      // Ambil data pertama kali saat halaman dimuat
+      document.addEventListener('DOMContentLoaded', fetchStats);
+    </script>
+  </body>
+</html>

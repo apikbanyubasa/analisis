@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }} - Admin DaashTics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  </head>
+  <body class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+      <!-- Login Card -->
+      <div
+        class="bg-white rounded-2xl shadow-lg p-8 space-y-6 border border-gray-200"
+      >
+        <!-- Header -->
+        <div class="text-center space-y-2">
+          <h2 class="text-2xl font-bold text-gray-800">Admin Login</h2>
+          <p class="text-gray-500 text-sm">
+            Silakan masuk untuk mengakses dashboard
+          </p>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %} {% if
+        messages %} {% for category, message in messages %}
+        <div
+          class="p-4 rounded-lg {% if category == 'danger' %} bg-red-100 border-red-400 text-red-700 {% elif category == 'success' %} bg-green-100 border-green-400 text-green-700 {% else %} bg-blue-100 border-blue-400 text-blue-700 {% endif %}"
+          role="alert"
+        >
+          {{ message }}
+        </div>
+        {% endfor %} {% endif %} {% endwith %}
+
+        <!-- Form -->
+        <form method="POST" action="" novalidate class="space-y-5">
+          {{ form.hidden_tag() }}
+
+          <!-- Username Input -->
+          <div class="space-y-1">
+            {{ form.username.label(class="block text-sm font-medium
+            text-gray-700") }} {{ form.username(class="w-full px-4 py-3 border
+            border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500
+            focus:border-transparent", placeholder="Masukkan username") }} {% if
+            form.username.errors %}
+            <div class="text-red-500 text-xs mt-1">
+              {% for error in form.username.errors %}<span>{{ error }}</span>{%
+              endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Password Input -->
+          <div class="space-y-1">
+            {{ form.password.label(class="block text-sm font-medium
+            text-gray-700") }} {{ form.password(class="w-full px-4 py-3 border
+            border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500
+            focus:border-transparent", placeholder="Masukkan password") }} {% if
+            form.password.errors %}
+            <div class="text-red-500 text-xs mt-1">
+              {% for error in form.password.errors %}<span>{{ error }}</span>{%
+              endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- reCAPTCHA -->
+          <div class="flex justify-center">{{ form.recaptcha }}</div>
+          {% if form.recaptcha.errors %}
+          <div class="text-red-500 text-xs text-center">
+            {% for error in form.recaptcha.errors %}<span>{{ error }}</span>{%
+            endfor %}
+          </div>
+          {% endif %}
+
+          <!-- Login Button -->
+          {{ form.submit(class="w-full bg-blue-600 hover:bg-blue-700 text-white
+          font-semibold py-3 px-4 rounded-lg transition duration-300
+          focus:outline-none focus:ring-2 focus:ring-blue-500
+          focus:ring-offset-2") }}
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

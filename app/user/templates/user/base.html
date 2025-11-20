@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}My App{% endblock %}</title>
+    <link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet" />
+    <script src="https://unpkg.com/alpinejs" defer></script>
+    {% block head %}{% endblock %}
+    <style>
+      .chart-container {
+        position: relative;
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <body class="font-sans antialiased bg-[#0E1222]" x-data="{ sidebarOpen: false }">
+    <!-- Sidebar -->
+    <aside
+      class="fixed inset-y-0 right-0 w-60 bg-[#141B35] shadow-lg transform transition-transform duration-200 z-50 p-4"
+      :class="{ 'translate-x-0': sidebarOpen, 'translate-x-full': !sidebarOpen }"
+    >
+      <div class="flex justify-between items-center mb-4">
+        <button @click="sidebarOpen = false" class="p-[8px] bg-[#0E1222] text-white rounded shadow">
+          <img src="{{ url_for('static', filename='img/x.svg') }}" alt="Close Icon" class="h-4 w-4" />
+        </button>
+      </div>
+      <ul class="space-y-2">
+        <!-- dashboard -->
+        <li>
+          <a
+            href="{{ url_for('user.dashboard') }}"
+            class="flex items-center px-3 py-2 rounded group {% if request.endpoint == 'user.dashboard' %} bg-white text-[#141B35] {% else %} text-white hover:bg-white hover:text-[#141B35] {% endif %}"
+          >
+            <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-4">
+              <g clip-path="url(#clip0_890_172)">
+                <path
+                  d="M256 134.524L73.3977 285.06C73.3977 285.272 73.3444 285.585 73.2376 286.011C73.133 286.434 73.0774 286.741 73.0774 286.959V439.392C73.0774 444.896 75.0896 449.666 79.1129 453.682C83.135 457.701 87.898 459.724 93.4029 459.724H215.347V337.773H296.654V459.728H418.597C424.101 459.728 428.871 457.71 432.887 453.682C436.91 449.67 438.929 444.897 438.929 439.392V286.959C438.929 286.113 438.814 285.475 438.609 285.06L256 134.524Z"
+                  fill="currentColor"
+                />
+                <path
+                  d="M508.467 250.76L438.923 192.962V63.3906C438.923 60.4285 437.97 57.9925 436.059 56.086C434.164 54.1817 431.728 53.2295 428.759 53.2295H367.786C364.821 53.2295 362.386 54.1817 360.478 56.086C358.575 57.9925 357.624 60.4296 357.624 63.3906V125.317L280.137 60.5297C273.37 55.0248 265.324 52.2729 256.007 52.2729C246.691 52.2729 238.646 55.0248 231.872 60.5297L3.52828 250.76C1.41153 252.451 0.251379 254.727 0.0355888 257.586C-0.17909 260.442 0.560605 262.937 2.2569 265.053L21.9461 288.554C23.6424 290.458 25.8626 291.623 28.6156 292.049C31.1573 292.262 33.6989 291.519 36.2406 289.826L256 106.58L475.762 289.825C477.459 291.302 479.678 292.04 482.431 292.04H483.385C486.134 291.621 488.35 290.449 490.055 288.549L509.746 265.051C511.439 262.931 512.181 260.441 511.961 257.581C511.744 254.73 510.58 252.454 508.467 250.76Z"
+                  fill="currentColor"
+                />
+              </g>
+              <defs>
+                <clipPath id="clip0_890_172">
+                  <rect width="512" height="512" fill="white" />
+                </clipPath>
+              </defs>
+            </svg>
+
+            Dashboard
+          </a>
+        </li>
+
+        <!-- CCTV -->
+        <li>
+          <a
+            href="{{ url_for('user.cctv') }}"
+            class="flex items-center px-3 py-2 rounded group {% if request.endpoint == 'user.cctv' %} bg-white text-[#141B35] {% else %} text-white hover:bg-white hover:text-[#141B35] {% endif %}"
+          >
+            <svg
+              width="25"
+              height="25"
+              class="mr-4"
+              viewBox="0 0 25 25"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5.22853 14.5905C4.99415 14.9663 5.07662 15.4836 5.40968 15.7446L5.91305 16.1388C5.08764 17.0366 3.98564 17.5384 2.83887 17.5386H1.46485V15.749C1.46485 15.2929 1.13692 14.923 0.732423 14.923C0.32793 14.923 0 15.2929 0 15.749V24.174C0 24.6302 0.32793 25 0.732423 25C1.13692 25 1.46485 24.6302 1.46485 24.174V22.4945H2.45762C5.08614 22.4945 7.65666 21.2481 9.48264 18.9345L10.2154 19.5083C10.548 19.7703 11.0095 19.6742 11.2383 19.2947L11.7403 18.4637L5.79835 13.678L5.22853 14.5905ZM24.6807 14.6642L24.4107 14.4561L18.793 19.5182L20.4004 20.8233C20.7144 21.0781 21.1533 21.0137 21.398 20.6713L24.8375 15.8652C25.1071 15.4883 25.032 14.9344 24.6807 14.6642ZM23.5434 11.7829L9.45993 0.313114C8.82736 -0.202187 7.94904 -0.0682682 7.46037 0.617736L2.83189 7.11462C2.30552 7.85365 2.43838 8.94257 3.12257 9.4936L15.5821 19.5279C15.7118 19.6323 15.8682 19.6862 16.0275 19.6814C16.1868 19.6765 16.3404 19.6132 16.4649 19.501L23.5717 13.0979C23.9494 12.7577 23.9363 12.1029 23.5434 11.7829ZM18.3594 13.2436C17.9549 13.2436 17.627 12.8737 17.627 12.4176C17.627 11.9614 17.9549 11.5916 18.3594 11.5916C18.7639 11.5916 19.0918 11.9614 19.0918 12.4176C19.0918 12.8737 18.7639 13.2436 18.3594 13.2436Z"
+                fill="currentColor"
+              />
+            </svg>
+
+            Lokasi CCTV
+          </a>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Konten Utama -->
+    <main class="p-0">{% block content %}{% endblock %}</main>
+  </body>
+</html>

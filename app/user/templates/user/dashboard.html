@@ -1,0 +1,548 @@
+{% extends "base.html" %} {% block title %}Dashboard Analisis Lalu Lintas{%
+endblock %} {% block head %} {{ super() }}
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""
+/>
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet">
+<style>
+  body {
+    background: #0e1222;
+    color: white;
+    font-family: "Inter", sans-serif;
+  }
+
+  .chart-container {
+    height: 250px !important;
+    max-height: 250px;
+    position: relative;
+  }
+  .chart-container canvas {
+    height: 100% !important;
+    width: 100% !important;
+  }
+
+
+  .search-container {
+    position: relative;
+  }
+
+  .search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 0 0 8px 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+  }
+
+  .search-item {
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #374151;
+    color: #e5e7eb;
+  }
+
+  .search-item:hover {
+    background: #374151;
+  }
+
+  .search-item:last-child {
+    border-bottom: none;
+  }
+
+  .video-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 12px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0));
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  .control-btn {
+    background: rgba(20, 27, 53, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    margin-left: 5px;
+  }
+
+  .control-btn:hover {
+    background: rgba(20, 27, 53, 1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .cctv-list {
+    max-height: 400px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .cctv-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cctv-item {
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .cctv-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(4px);
+  }
+
+  .cctv-item.active {
+    background: linear-gradient(45deg, #8f363d, #e2562a);
+    border-color: #e2562a;
+  }
+
+  .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+  }
+
+  .status-active {
+    background: #10b981;
+    animation: pulse 2s infinite;
+  }
+
+  .status-inactive {
+    background: #ef4444;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .stats-panel {
+    background: linear-gradient(135deg, #141b35 0%, #1a2142 100%);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .stat-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    transition: transform 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    background: linear-gradient(45deg, #10dfb4, #e2562a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .stat-label {
+    color: #9ca3af;
+    font-size: 0.875rem;
+    margin-top: 4px;
+  }
+
+  .tab-btn {
+    padding: 10px 20px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    font-weight: 500;
+  }
+  .tab-btn:hover {
+    color: white;
+  }
+  .tab-btn.active-tab {
+    color: #facc15;
+    border-bottom-color: #facc15;
+  }
+
+  /* Detection Stream Styles */
+  .stream-container {
+    position: relative;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  }
+
+  .detection-status {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 100;
+    background: rgba(16, 223, 180, 0.9);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .detection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: white;
+    animation: pulse 2s infinite;
+  }
+
+  .stream-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .loading-indicator {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 150;
+  }
+
+  .loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #10dfb4;
+    animation: spin 1s ease-in-out infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<header class="flex justify-between items-center p-4">
+  <div class="flex items-center space-x-2">
+    <img
+      src="{{ url_for('static', filename='img/logo_bogor.svg') }}"
+      alt="Logo"
+      class="h-16 w-16 object-contain"
+    />
+    <div class="flex flex-col">
+      <span class="text-white font-semibold text-2xl relative -top-2"
+        >PEMERINTAH DAERAH KOTA BOGOR</span
+      >
+      <span class="text-yellow-400 text-sm"
+        >Dashboard Analisis Lalu Lintas</span
+      >
+    </div>
+  </div>
+  <div class="flex items-center space-x-3 relative -top-4">
+    <button
+      @click="sidebarOpen = !sidebarOpen"
+      class="focus:outline-none p-[6px] bg-[#141B35] text-white rounded shadow"
+    >
+      <img
+        src="{{ url_for('static', filename='img/burger.svg') }}"
+        alt="Menu Icon"
+        class="h-5 w-5"
+      />
+    </button>
+  </div>
+</header>
+
+<div class="max-w-screen-xl mx-auto px-4">
+  <div class="mb-6">
+    <div class="flex border-b border-gray-700">
+      <button
+        id="btn-dashboard"
+        onclick="switchTab('dashboard')"
+        class="tab-btn active-tab"
+      >
+        Dashboard Utama
+      </button>
+      <button id="btn-analysis" onclick="switchTab('analysis')" class="tab-btn">
+        Analisis Data
+      </button>
+    </div>
+  </div>
+
+  <div id="tab-dashboard" class="tab-content">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
+      <div class="lg:col-span-3">
+        <div class="bg-[#141B35] p-4 rounded-lg shadow-lg h-full">
+          <h2
+            class="text-lg font-semibold text-white mb-4 flex items-center gap-2"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2v11z"
+              />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            Daftar CCTV
+          </h2>
+          <div class="search-container mb-4">
+            <input
+              type="text"
+              id="cctv-search"
+              placeholder="Cari lokasi CCTV..."
+              class="w-full px-3 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:border-yellow-400 focus:outline-none text-sm"
+            />
+            <div
+              id="search-results"
+              class="search-results"
+              style="display: none"
+            ></div>
+          </div>
+          <div class="cctv-list" id="cctv-list"></div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-6">
+        <div class="bg-[#141B35] p-4 rounded-lg shadow-lg h-full flex flex-col">
+          <div class="flex justify-between items-center mb-3">
+  <h2 class="text-lg font-semibold text-white">
+    Deteksi Real-time:
+    <span id="current-location" class="text-yellow-400">
+      {{ featured_cctv_lokasi or "Pilih CCTV" }}
+    </span>
+  </h2>
+  </div>
+
+          <div
+            class="relative aspect-video bg-black rounded-md overflow-hidden stream-container"
+          >
+            <!-- Detection Status Overlay -->
+
+            <!-- Stream Controls -->
+            <div class="stream-controls">
+              <button
+                onclick="openFullAnalysis()"
+                class="control-btn"
+                title="Full Analysis"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div id="detection-container" class="w-full h-full">
+              {% if featured_cctv_idx is not none %}
+              <img id="detection-stream" 
+              src="{{ url_for('user.analyze_stream', cctv_id=featured_cctv_idx) }}" 
+              alt="CCTV Detection Stream" 
+              class="w-full h-full object-contain" 
+              style="display: block;">
+              {% else %}
+              <div class="w-full h-full flex items-center justify-center">
+                <div class="text-center">
+                  <img
+                    src="{{ url_for('static', filename='img/cam_dead.svg') }}"
+                    alt="No CCTV"
+                    class="w-16 h-16 opacity-60 mb-2 mx-auto"
+                  />
+                  <p class="text-gray-500">Pilih CCTV untuk memulai deteksi</p>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+
+            <div
+              id="loading-detection"
+              class="loading-indicator"
+              style="display: none"
+            >
+              <div class="text-center">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <p class="text-white">Memuat deteksi...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-time Detection Stats -->
+          <div id="realtime-stats" class="mt-4">
+            <div class="grid grid-cols-4 gap-2">
+              <div class="stat-card">
+                <div class="stat-value text-lg" id="personCount">0</div>
+                <div class="stat-label text-xs">Orang</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value text-lg" id="carCount">0</div>
+                <div class="stat-label text-xs">Mobil</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value text-lg" id="motorcycleCount">0</div>
+                <div class="stat-label text-xs">Motor</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value text-lg" id="busCount">0</div>
+                <div class="stat-label text-xs">Bus</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-auto"></div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-3 h-96 lg:h-auto">
+        <div class="bg-[#141B35] p-4 rounded-lg shadow-lg h-full flex flex-col">
+          <h2 class="text-lg font-semibold text-white mb-3">Peta Lokasi</h2>
+
+          <div class="flex-1 rounded-md bg-gray-700 overflow-hidden">
+            <div id="map" class="w-full h-full"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-analysis" class="tab-content" style="display: none">
+    <div id="data-section">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div
+          class="bg-[#141B35] text-white p-4 rounded-lg shadow-lg flex flex-col justify-between"
+        >
+          <div>
+            <p class="text-sm text-gray-400">Total Deteksi</p>
+            <p class="text-2xl font-bold" id="total-detections">0</p>
+          </div>
+          <p class="text-xs text-green-400">Data Real-time</p>
+        </div>
+        <div
+          class="bg-[#141B35] text-white p-4 rounded-lg shadow-lg flex flex-col justify-between"
+        >
+          <div>
+            <p class="text-sm text-gray-400">Objek Terbanyak</p>
+            <p class="text-2xl font-bold" id="most-detected">-</p>
+          </div>
+          <p class="text-xs text-white">Saat Ini</p>
+        </div>
+        <div
+          class="bg-[#141B35] text-white p-4 rounded-lg shadow-lg flex flex-col justify-between"
+        >
+          <div>
+            <p class="text-sm text-gray-400">FPS</p>
+            <p class="text-2xl font-bold" id="fps-display">0</p>
+          </div>
+          <p class="text-xs text-white">Frame Rate</p>
+        </div>
+        <div
+          class="bg-[#141B35] text-white p-4 rounded-lg shadow-lg flex flex-col justify-between"
+        >
+          <div>
+            <p class="text-sm text-gray-400">Durasi Aktif</p>
+            <p class="text-2xl font-bold" id="detection-duration">00:00</p>
+          </div>
+          <p class="text-xs text-white">Waktu Aktif</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-[#141B35] p-4 rounded-lg shadow-lg">
+          <h2 class="text-md font-semibold text-white mb-2">
+            Deteksi Real-time
+          </h2>
+          <div class="chart-container h-[250px]">
+            <canvas id="realtimeChart"></canvas>
+          </div>
+        </div>
+        <div class="bg-[#141B35] p-4 rounded-lg shadow-lg">
+          <h2 class="text-md font-semibold text-white mb-2">Komposisi Objek</h2>
+          <div
+            class="chart-container h-[250px] flex items-center justify-center"
+          >
+            <canvas id="compositionChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</div> <script>
+  // Koki (Flask) meletakkan data (bahan makanan) ke dalam variabel global 'window' (piring)
+  window.CCTV_DATA = {{ cctv_data | tojson }};
+  window.FEATURED_CCTV_IDX = {{ featured_cctv_idx or 'null' }};
+   window.URLS = {
+    analyze_stream: "{{ url_for('user.analyze_stream', cctv_id=0) }}", // <-- PERBAIKI DI SINI
+    analyze_feed: "{{ url_for('user.analyze_feed', cctv_id=0) }}"   // <-- DAN DI SINI JUGA
+  };
+</script>
+<script src="{{ url_for('static', filename='js/user/dashboard.js') }}"></script>
+{% endblock %}

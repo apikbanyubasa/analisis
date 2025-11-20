@@ -1,0 +1,106 @@
+{% extends "admin/base.html" %} {% block title %}Kontak{% endblock %} {% block styles %}{% endblock %} {% block
+page_title %}Kontak{% endblock %} {% block page_subtitle %}Manajemen Data Kontak{% endblock %} {% block header_extra %}
+{% endblock %} {% block content %}
+<div
+  class="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-wrap justify-between items-center gap-4"
+>
+  <h2 class="text-lg font-semibold text-gray-800">Manajemen Data Kontak</h2>
+  <div class="mt-4 sm:mt-0">
+    <a
+      href="{{ url_for('admin.add_kontak') }}"
+      class="bg-purple-medium hover:bg-purple-dark text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 inline-flex items-center space-x-2"
+    >
+      <i class="fas fa-plus"></i>
+      <span>Tambah Kontak Baru</span>
+    </a>
+  </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead class="bg-gray-50 border-b border-gray-200">
+        <tr>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Instansi</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">
+            Nomor Telepon
+          </th>
+          <th class="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Aksi</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for kontak in data_kontak %}
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="font-medium text-gray-900">{{ kontak.instansi }}</span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-gray-600">{{ kontak.nomor_telp }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+            <div class="flex justify-center items-center space-x-4">
+              <!-- Tombol Edit -->
+              <a
+                href="{{ url_for('admin.edit_kontak', kontak_id=kontak.id) }}"
+                class="text-blue-600 hover:text-blue-900"
+                title="Edit"
+              >
+                <i class="fas fa-edit"></i>
+              </a>
+
+              <!-- Form Delete (pakai SweetAlert) -->
+              <form
+                method="POST"
+                action="{{ url_for('admin.delete_kontak', kontak_id=kontak.id) }}"
+                class="delete-form inline-block"
+                data-instansi="{{ kontak.instansi }}"
+              >
+                {{ form.csrf_token }}
+                <button type="button" class="text-red-600 hover:text-red-900 cursor-pointer delete-btn" title="Hapus">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+            Belum ada data kontak darurat yang ditambahkan.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %} {% block scripts %} {{ super() }}
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const deleteButtons = document.querySelectorAll('.delete-btn');
+
+    deleteButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const form = btn.closest('.delete-form');
+        const instansi = form.dataset.instansi;
+
+        Swal.fire({
+          title: 'Hapus Kontak?',
+          text: `Apakah Anda yakin ingin menghapus kontak "${instansi}"?`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#3085d6',
+          confirmButtonText: 'Ya, Hapus!',
+          cancelButtonText: 'Batal',
+        }).then((result) => {
+          if (result.isConfirmed) {
+            form.submit();
+          }
+        });
+      });
+    });
+  });
+</script>
+{% endblock %}

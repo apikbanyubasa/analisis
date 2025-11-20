@@ -1,0 +1,280 @@
+{% extends "admin/base.html" %} {% block title %}CCTV{% endblock %} {% block styles %} {% endblock %} {% block
+page_title %}CCTV{% endblock %} {% block page_subtitle %}Manajemen Data CCTV{% endblock %} {#
+============================================== #} {# == BLOK BARU UNTUK NOTIFIKASI DI HEADER == #} {#
+============================================== #} {% block header_extra %}
+{% endblock %} {# <-- 👇👇👇 PERBAIKAN: Tambahkan endblock ini 👇👇👇 #} {#
+============================================== #} {# == AKHIR BLOK HEADER EXTRA == #} {#
+============================================== #} {% block content %}
+<div
+  class="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+>
+  <h2 class="text-lg font-semibold text-gray-800">Manajemen Data CCTV</h2>
+  <div class="flex flex-wrap items-center gap-2">
+    <a
+      href="{{ url_for('admin.add_cctv') }}"
+      class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200"
+    >
+      <i class="fas fa-plus"></i>
+      <span class="font-medium">Tambah Data</span>
+    </a>
+    <button
+      id="import-csv-btn"
+      class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200"
+    >
+      <i class="fas fa-file-import"></i>
+      <span class="font-medium">Impor CSV</span>
+    </button>
+    <a
+      href="{{ url_for('admin.download_csv') }}"
+      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200"
+    >
+      <i class="fas fa-file-csv text-sm"></i>
+      <span class="font-medium">CSV</span>
+    </a>
+    <a
+      href="{{ url_for('admin.download_excel') }}"
+      class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200"
+    >
+      <i class="fas fa-file-excel"></i>
+      <span class="font-medium">Excel</span>
+    </a>
+    <button
+      id="deleteAllBtn"
+      type="button"
+      class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path
+          fill-rule="evenodd"
+          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
+          clip-rule="evenodd"
+        />
+      </svg>
+      <span class="font-medium">Hapus Semua</span>
+    </button>
+    <form id="deleteAllForm" action="{{ url_for('admin.delete_all_cctv') }}" method="POST" class="hidden">
+      {{ form.hidden_tag() }}
+    </form>
+  </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+  <div class="p-4 flex-shrink-0 border-b border-gray-100">
+            <div class="relative">
+              <input
+                type="text"
+                placeholder="Cari lokasi kamera..."
+                class="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-sm"
+              />
+              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+          </div>
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead class="bg-gray-50 border-b border-gray-200">
+        <tr>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lokasi</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Video URL</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe Kamera</th>
+          <th class="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for cctv in data %}
+        <tr class="hover:bg-gray-50 transition-colors duration-150">
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ cctv.lokasi or '-' }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+            <span
+              class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if cctv.status == 'Aktif' %} bg-green-100 text-green-800 {% elif cctv.status == 'Tidak Aktif' %} bg-red-100 text-red-800 {% else %} bg-yellow-100 text-yellow-800 {% endif %}"
+            >
+              {{ cctv.status or '-' }}
+            </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            {% if cctv.video_url %}
+            <a href="{{ cctv.video_url }}" target="_blank" class="text-blue-600 hover:underline">Lihat Live</a>
+            {% else %} - {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ cctv.type or '-' }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ cctv.camera_type or '-' }}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+            <div class="flex justify-center items-center space-x-4">
+              <a
+                href="{{ url_for('admin.edit_cctv', cctv_id=cctv.id) }}"
+                class="text-purple-600 hover:text-purple-900"
+                title="Edit"
+              >
+                <i class="fas fa-edit"></i>
+              </a>
+              <form
+                id="delete-form-{{ cctv.id }}"
+                action="{{ url_for('admin.delete_cctv', cctv_id=cctv.id) }}"
+                method="POST"
+              >
+                <button
+                  type="button"
+                  class="delete-btn text-red-600 hover:text-red-900"
+                  data-cctv-id="{{ cctv.id }}"
+                  data-cctv-lokasi="{{ cctv.lokasi }}"
+                  title="Hapus"
+                >
+                  <i class="fas fa-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center py-10 text-gray-500">
+            Belum ada data CCTV. Silakan
+            <a href="{{ url_for('admin.add_cctv') }}" class="text-purple-600 hover:underline">tambah data baru</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div> <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 flex justify-start space-x-8">
+    <div>
+        <p class="text-sm text-gray-500">Total CCTV</p>
+        <p class="text-2xl font-bold text-gray-800">{{ summary.total }}</p>
+    </div>
+    <div>
+        <p class="text-sm text-gray-500">CCTV Aktif</p>
+        <p class="text-2xl font-bold text-green-600">{{ summary.aktif }}</p>
+    </div>
+    <div>
+        <p class="text-sm text-gray-500">CCTV Tidak Aktif</p>
+        <p class="text-2xl font-bold text-red-600">{{ summary.nonaktif }}</p>
+    </div>
+</div>
+  </div>
+</div>
+{% endblock %} {% block scripts %} {{ super() }}
+<script>
+  // SweetAlert untuk Tombol Impor CSV
+  document.getElementById('import-csv-btn').addEventListener('click', function () {
+    Swal.fire({
+      title: 'Impor Data dari CSV',
+      html: `
+                <form 
+                    id="upload-form" 
+                    action="{{ url_for('admin.upload_csv') }}" 
+                    method="POST" 
+                    enctype="multipart/form-data"
+                >
+                    <p class="text-sm text-gray-500 mb-4">
+                        Pilih file .csv yang ingin Anda unggah.
+                    </p>
+                    <input
+                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+                        id="file"
+                        name="csv_file"
+                        type="file"
+                        accept=".csv"
+                        required
+                    />
+                </form>
+            `,
+      confirmButtonText: 'Unggah File',
+      confirmButtonColor: '#8B5CF6',
+      showCancelButton: true,
+      cancelButtonText: 'Batal',
+      focusConfirm: false,
+      preConfirm: () => {
+        const fileInput = Swal.getPopup().querySelector('#file');
+        if (fileInput.files.length === 0) {
+          Swal.showValidationMessage(`Anda harus memilih sebuah file!`);
+        } else {
+          document.getElementById('upload-form').submit();
+        }
+      },
+    });
+  });
+
+  // SweetAlert untuk Tombol Hapus
+  const deleteButtons = document.querySelectorAll('.delete-btn');
+  deleteButtons.forEach((button) => {
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+
+      const cctvId = this.dataset.cctvId;
+      const cctvLokasi = this.dataset.cctvLokasi;
+
+      Swal.fire({
+        title: 'Apakah Anda Yakin?',
+        text: `Anda akan menghapus data CCTV di "${cctvLokasi}". Tindakan ini tidak dapat dibatalkan.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Ya, hapus!',
+        cancelButtonText: 'Batal',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          document.getElementById(`delete-form-${cctvId}`).submit();
+        }
+      });
+    });
+  });
+
+  document.getElementById('deleteAllBtn').addEventListener('click', function (e) {
+    e.preventDefault(); // Mencegah aksi default
+
+    Swal.fire({
+      title: 'Apakah Anda Yakin?',
+      text: 'Semua data CCTV akan dihapus secara permanen dan tidak dapat dikembalikan!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Ya, Hapus Semua!',
+      cancelButtonText: 'Batal',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Jika user menekan "Ya", submit form hapus
+        document.getElementById('deleteAllForm').submit();
+      }
+    });
+  });
+
+    // Fungsi Search pada tabel CCTV
+  const searchInput = document.querySelector('input[placeholder="Cari lokasi kamera..."]');
+  const tableRows = document.querySelectorAll('tbody tr');
+
+  searchInput.addEventListener('input', function () {
+    const keyword = this.value.toLowerCase().trim();
+
+    tableRows.forEach((row) => {
+      const lokasi = row.querySelector('td:first-child')?.textContent.toLowerCase() || '';
+      if (lokasi.includes(keyword)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    // Jika hasil kosong (semua disembunyikan)
+    const visibleRows = Array.from(tableRows).filter((row) => row.style.display !== 'none');
+    const emptyRow = document.getElementById('no-results-row');
+
+    if (visibleRows.length === 0) {
+      if (!emptyRow) {
+        const tr = document.createElement('tr');
+        tr.id = 'no-results-row';
+        tr.innerHTML = `
+          <td colspan="6" class="text-center py-10 text-gray-500">
+            Tidak ditemukan hasil pencarian untuk "<span class="font-semibold">${keyword}</span>".
+          </td>
+        `;
+        document.querySelector('tbody').appendChild(tr);
+      }
+    } else if (emptyRow) {
+      emptyRow.remove();
+    }
+  });
+
+</script>
+{% endblock %}

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Dashboard Admin{% endblock %}</title>
+    <link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+
+    <!-- 1. TAMBAHKAN LIBRARY SOCKET.IO -->
+      <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+      .clickable-toast {
+        cursor: pointer;
+      }
+    </style>
+    <!-- AKHIR TAMBAHAN -->
+
+    {% block head %}{% endblock %}
+  </head>
+  <body class="bg-gray-50">
+    <div
+      class="w-64 bg-gradient-to-b from-purple-900 via-purple-800 to-purple-900 min-h-screen text-white fixed left-0 top-0 z-50 transition-transform duration-300 lg:translate-x-0 -translate-x-full **relative overflow-hidden**"
+    >
+      <div class="p-6 border-b border-purple-700">
+        <div class="flex items-center space-x-3">
+          <img
+            src="{{ url_for('static', filename='img/logo_bogor.svg') }}"
+            alt="Logo"
+            class="h-16 w-16 object-contain"
+          />
+          <div>
+            <h1 class="text-[12px] font-bold text-white leading-tight">PEMERINTAH DAERAH</h1>
+            <h2 class="text-[12px] font-bold text-white leading-tight">KOTA BOGOR</h2>
+          </div>
+        </div>
+      </div>
+
+      <div class="py-6 **overflow-y-auto**" **style="max-height: calc(100vh - 116px - 72px);" **>
+        <div class="px-6 mb-4">
+          <h3 class="text-xs font-semibold text-purple-300 uppercase tracking-wider">Sistem</h3>
+        </div>
+
+        <nav class="space-y-2 px-3">
+          <a
+            href="{{ url_for('admin.deteksi') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/deteksi.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">Deteksi</span>
+          </a>
+          <a
+            href="{{ url_for('admin.chat_center') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/call_center.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">Chat Center</span>
+          </a>
+        </nav>
+
+        <div class="px-6 mt-4 mb-4">
+          <h3 class="text-xs font-semibold text-purple-300 uppercase tracking-wider">Data</h3>
+        </div>
+
+        <nav class="space-y-2 px-3">
+          {% if current_user.role == 'admin' %}
+          <a
+            href="{{ url_for('admin.cctv') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/cctv.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">CCTV</span>
+          </a>
+          {% endif %} {% if current_user.role == 'admin' %}
+          <a
+            href="{{ url_for('admin.nomor') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/kontak.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">Kontak</span>
+          </a>
+          {% endif %} {% if current_user.role == 'admin' %}
+          <a
+            href="{{ url_for('admin.batas') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/peta.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">Peta</span>
+          </a>
+          {% endif %}
+
+          <a
+            href="{{ url_for('admin.history') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/riwayat.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">Riwayat</span>
+          </a>
+
+          {% if current_user.role == 'admin' %}
+          <a
+            href="{{ url_for('admin.users') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/pengguna.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">Pengguna</span>
+          </a>
+          {% endif %}
+
+          <a
+            href="{{ url_for('admin.settings') }}"
+            class="flex items-center px-3 py-2 rounded-lg text-purple-200 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 group"
+          >
+            <img
+              src="{{ url_for('static', filename='img/pengaturan.svg') }}"
+              alt="Deteksi Icon"
+              class="h-8 w-8 mr-4 object-contain"
+            />
+            <span class="font-medium">Pengaturan</span>
+          </a>
+        </nav>
+      </div>
+
+      <div class="px-6 py-4 border-t border-purple-700 absolute bottom-0 left-0 right-0">
+        <a
+          id="logout-btn"
+          href="{{ url_for('admin.logout') }}"
+          class="flex justify-center items-center w-full py-3 rounded-lg bg-pink-700 text-white hover:bg-red-600 transition-all duration-200 group font-medium"
+          style="**background-color: #A92C5A;**"
+        >
+          <span class="font-medium">Logout</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="flex-1 lg:ml-64 flex flex-col h-screen">
+      <header class="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex-shrink-0">
+        <div class="flex justify-between items-center">
+          <div class="flex-1 min-w-0">
+            <h1 class="text-2xl font-bold text-gray-800 truncate">{% block page_title %}Dashboard{% endblock %}</h1>
+            <p class="text-gray-600 mt-1 truncate">{% block page_subtitle %}Manage your admin panel{% endblock %}</p>
+          </div>
+          <div class="flex items-center space-x-4 ml-4">
+            {% block header_extra %}{% endblock %}
+
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
+                {% if current_user.role == 'admin' %}
+                <i class="fas fa-crown text-white text-sm"></i>
+                {% elif current_user.role == 'operator' %}
+                <i class="fas fa-user-gear text-white text-sm"></i>
+                {% else %}
+                <i class="fas fa-user text-white text-sm"></i>
+                {% endif %}
+              </div>
+              <span class="text-gray-700 font-medium">{{ current_user.username }}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="p-6 flex-1 overflow-y-auto">{% block content %}{% endblock %}</main>
+    </div>
+
+    <div class="lg:hidden fixed top-4 left-4 z-50">
+      <button id="mobile-menu-toggle" class="bg-purple-600 text-white p-2 rounded-lg">
+        <i class="fas fa-bars"></i>
+      </button>
+    </div>
+
+    {% block scripts %}
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        // Mobile menu toggle functionality
+        const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+        const sidebar = document.querySelector('.w-64');
+
+        if (mobileMenuToggle) {
+          mobileMenuToggle.addEventListener('click', function () {
+            sidebar.classList.toggle('-translate-x-full');
+          });
+        }
+
+        // Active menu highlighting
+        const currentPath = window.location.pathname;
+        const menuLinks = document.querySelectorAll('nav a');
+
+        menuLinks.forEach((link) => {
+          if (link.getAttribute('href') === currentPath) {
+            link.classList.add('bg-white', 'bg-opacity-20', 'text-white');
+            link.classList.remove('text-purple-200');
+          }
+        });
+
+        // LOGIKA UNTUK KONFIRMASI LOGOUT DITAMBAHKAN DI SINI
+        const logoutButton = document.getElementById('logout-btn');
+        if (logoutButton) {
+          logoutButton.addEventListener('click', function (event) {
+            event.preventDefault(); // Mencegah navigasi langsung
+            const logoutUrl = this.href; // Ambil URL dari atribut href
+
+            Swal.fire({
+              title: 'Apakah Anda Yakin?',
+              text: 'Anda akan keluar dari sesi admin.',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#d33', // Merah untuk aksi destruktif
+              cancelButtonColor: '#6366f1', // Ungu medium
+              confirmButtonText: 'Ya, Logout!',
+              cancelButtonText: 'Batal',
+            }).then((result) => {
+              if (result.isConfirmed) {
+                // Arahkan ke URL logout jika dikonfirmasi
+                window.location.href = logoutUrl;
+              }
+            });
+          });
+        }
+      });
+    </script>
+    {% endblock %}
+
+    <!-- 2. TAMBAHKAN SCRIPT PENDENGAR SOCKET.IO DI SINI -->
+    <script>
+      // Pastikan 'io' ada (dari library yg dimuat di <head>)
+      if (typeof io !== "undefined") {
+        // 1. Hubungkan ke server
+        const socket = io();
+
+        // 2. (Opsional) Cek di console browser apakah koneksi berhasil
+        socket.on("connect", () => {
+          console.log("Berhasil terhubung ke server Socket.IO.");
+        });
+
+        socket.on("disconnect", () => {
+          console.warn("Koneksi Socket.IO terputus.");
+        });
+
+        // 3. INI BAGIAN UTAMA: Mendengarkan event 'notifikasi_baru' dari server
+          socket.on("notifikasi_baru", (data) => {
+            console.log("Menerima Notifikasi Baru:", data);
+
+            // --- INI SATU-SATUNYA KODE YANG ANDA BUTUHKAN ---
+            Swal.fire({
+             // Properti dasar toast
+               toast: true,
+              position: "top-end",
+              showConfirmButton: false,
+              timer: 5000,
+              timerProgressBar: true,
+
+              // Properti konten
+              icon: data.icon || "warning",
+              title: data.title || "Pelanggaran Terdeteksi!",
+              text: data.detail || "Cek dashboard untuk detail.",
+
+              // --- INI BAGIAN PENTING UNTUK KLIK ---
+
+              // 1. Fungsi 'onClick' bawaan SweetAlert
+              onClick: () => {
+                  // Langsung arahkan ke halaman deteksi
+                  window.location.href = "{{ url_for('admin.deteksi') }}";
+              },
+
+              // 2. Terapkan CSS 'clickable-toast'
+              customClass: {
+                  popup: 'clickable-toast'
+              },
+
+              // 3. Fungsi 'didOpen' untuk timer
+              didOpen: (toast) => {
+                toast.addEventListener("mouseenter", Swal.stopTimer);
+                toast.addEventListener("mouseleave", Swal.resumeTimer);
+              }
+            });
+            // --- AKHIR DARI KODE BARU ---
+          });
+
+          // Nanti kita bisa tambahkan kode di sini untuk update ikon lonceng
+          // jika Anda menambahkannya di base.html ini.
+
+      } else {
+        console.error("Socket.IO library gagal dimuat. Notifikasi real-time tidak akan berfungsi.");
+      }
+    </script>
+    <!-- AKHIR DARI BLOK SCRIPT SOCKET.IO -->
+
+
+    {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %}
+    <script>
+      window.addEventListener('DOMContentLoaded', (event) => {
+          {% for category, message in messages %}
+              Swal.fire({
+                  title: '{{ category.capitalize() }}!',
+                  text: '{{ message | tojson | safe }}',
+                  icon: '{{ "error" if category == "danger" else category }}',
+                  confirmButtonColor: '#6366f1',
+                  confirmButtonText: 'Oke'
+              });
+          {% endfor %}
+      });
+    </script>
+    {% endif %} {% endwith %}
+  </body>
+</html>

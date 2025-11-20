@@ -1,0 +1,73 @@
+# Dependencies
+/node_modules
+
+# Database Files
+traffic_analysis.db
+traffic_counting.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# File Rahasia (Sangat Penting!)
+# Jangan pernah commit file .env atau file berisi kredensial lainnya.
+.env
+*.env.*
+!*.env.example
+
+# Folder Instance (umum di Flask)
+instance/
+
+# Editor & IDE Configuration
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# File Log
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Sistem Operasi & Lain-lain
+.DS_Store
+Thumbs.db
+
+# File Cache Python
+__pycache__/
+*.pyc
+# Lingkungan Virtual
+venv/

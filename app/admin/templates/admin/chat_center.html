@@ -1,0 +1,670 @@
+{% extends "admin/base.html" %} {% block title %}Chat Center{% endblock %} {% block styles %}{% endblock %} {% block
+page_title %}Chat Center{% endblock %} {% block page_subtitle %}Koordinasi dan Komunikasi Petugas{% endblock %} {% block
+header_extra %}
+{% endblock %} {% block content %}
+<div class="flex flex-col min-h-screen space-y-4">
+  <!-- Chat Interface -->
+  <div
+    class="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-0 flex-1 rounded-xl shadow-lg overflow-hidden border border-purple-600/10"
+  >
+    <!-- Contact List - Left Panel -->
+    <div
+      class="lg:col-span-3 flex flex-col bg-white/95 border-b lg:border-b-0 lg:border-r border-gray-200 h-[300px] lg:h-auto"
+    >
+      <div class="flex-1 overflow-y-auto p-2 space-y-1" id="contact-list-container">
+        {% for item in recent_contacts %} {% set kontak = item.kontak %} {% set latest_dispatch = item.last_dispatch %}
+        <div
+          class="contact-item flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-purple-200 transition-colors"
+          data-kontak-id="{{ kontak.id }}"
+          data-kontak-nama="{{ kontak.instansi }}"
+          data-kontak-nomor="{{ kontak.nomor_telp }}"
+        >
+          <div class="relative flex-shrink-0">
+            <div
+              class="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+            >
+              {{ kontak.instansi[0]|upper }}
+            </div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-sm text-gray-800 truncate">{{ kontak.instansi }}</p>
+            <p class="text-xs text-gray-600 truncate">{{ latest_dispatch.instruksi|truncate(30, True) }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Chat Area - Middle Panel -->
+    <div class="lg:col-span-5 flex flex-col bg-white min-h-[500px] lg:min-h-0">
+      <div class="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="relative flex-shrink-0">
+            <div
+              id="chat-header-icon"
+              class="w-10 h-10 bg-gradient-to-br from-gray-300 to-gray-400 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+            >
+              ...
+            </div>
+          </div>
+          <div class="flex-1">
+            <p id="chat-header-name" class="font-semibold text-sm text-gray-800">Pilih Kontak</p>
+            <p id="chat-header-info" class="text-xs text-gray-600">Pilih instansi dari daftar kiri</p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        id="chat-messages-container"
+        class="flex-1 p-4 lg:p-6 space-y-4 overflow-y-auto"
+        style="background-image: url('{{ url_for('static', filename='img/wa_bg.png') }}'); background-repeat: repeat;"
+      >
+        <div id="chat-placeholder" class="text-center text-gray-500 mt-20">
+          <i class="fas fa-comments text-4xl mb-3"></i>
+          <p>Pilih instansi di panel kiri untuk melihat riwayat dispatch.</p>
+        </div>
+      </div>
+
+      <div id="chat-input-area" class="p-3 lg:p-4 border-t border-gray-200 bg-gray-100 flex-shrink-0 hidden">
+        <div class="flex items-center gap-2 lg:gap-3">
+          <input
+            type="text"
+            placeholder="Ketik pesan..."
+            class="flex-1 px-3 lg:px-4 py-2 lg:py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+          />
+          <button
+            class="p-2.5 lg:p-3 w-10 h-10 lg:w-12 lg:h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-all duration-200 flex-shrink-0 flex items-center justify-center shadow-lg"
+            title="Kirim"
+          >
+            <i class="fas fa-paper-plane text-base lg:text-lg"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dispatcher Console - Right Panel -->
+    <div class="lg:col-span-4 flex flex-col bg-white/95 border-t lg:border-t-0 lg:border-l border-gray-200">
+      <div class="p-4 border-b border-gray-200 flex-shrink-0">
+        <h2 class="text-lg lg:text-xl font-semibold text-gray-800" data-translate="dispatcher-console">
+          Konsol Dispatcher
+        </h2>
+      </div>
+
+      <div class="flex-1 flex flex-col p-4 min-h-0">
+        <!-- Quick Action Buttons with Scroll -->
+        <div class="mb-4 flex-shrink-0">
+          <h3 class="text-sm font-medium text-gray-700 mb-2">Pilih Instansi</h3>
+          <div class="overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50" style="max-height: 168px">
+            <div class="grid grid-cols-2 gap-2">
+              {% for kontak in all_kontak %}
+              <button
+                type="button"
+                class="instansi-button bg-purple-100 hover:bg-purple-200 text-purple-700 py-2 px-2 rounded-lg flex items-center justify-center text-sm transition-colors h-12"
+                data-instansi-nama="{{ kontak.instansi }}"
+                data-nomor-telp="{{ kontak.nomor_telp }}"
+                data-kontak-id="{{ kontak.id }}"
+              >
+                <span>{{ kontak.instansi }}</span>
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Section -->
+        <div class="space-y-4 flex-shrink-0">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2" data-translate="select-unit">Pilih Tipe</label>
+            <select
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              <option>Darurat</option>
+              <option>Keluhan</option>
+              <option>Infrastruktur</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2" data-translate="dispatch-instructions"
+              >Instruksi Dispatch</label
+            >
+            <textarea
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              rows="3"
+              data-translate-placeholder="enter-instructions"
+              placeholder="Masukkan instruksi dispatch..."
+            ></textarea>
+          </div>
+
+          <button
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium text-sm shadow-sm transition-colors"
+            data-translate="send-dispatch"
+          >
+            Kirim Dispatch
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notes Section -->
+  <div
+    id="admin-notes-container"
+    class="flex-shrink-0 grid grid-cols-1 lg:grid-cols-12 rounded-xl shadow-lg overflow-hidden border border-gray-200 bg-white"
+  >
+    <!-- Notes List -->
+    <div class="lg:col-span-4 flex flex-col h-[300px] lg:h-[40vh] border-b lg:border-b-0 lg:border-r border-gray-200">
+      <div class="p-3 lg:p-4 border-b border-gray-200 flex-shrink-0">
+        <h3 class="font-semibold text-gray-800 mb-2">Daftar Catatan</h3>
+        <input
+          type="text"
+          id="search-notes-input"
+          placeholder="Cari judul catatan..."
+          class="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm"
+        />
+      </div>
+
+      <div id="note-list-container" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+
+      <div class="p-2 lg:p-3 border-t border-gray-200 flex-shrink-0">
+        <button
+          id="add-new-note-btn"
+          class="w-full px-3 py-2 text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-lg flex items-center justify-center gap-2 shadow-sm transition-colors"
+        >
+          <i class="fas fa-plus text-xs"></i>
+          Buat Catatan Baru
+        </button>
+      </div>
+    </div>
+
+    <!-- Notes Detail/Editor -->
+    <div class="lg:col-span-8 flex flex-col h-[400px] lg:h-[40vh]" id="note-detail-container">
+      <!-- Placeholder -->
+      <div
+        id="note-placeholder"
+        class="flex-grow flex flex-col items-center justify-center text-center text-gray-500 p-4"
+      >
+        <i class="fas fa-mouse-pointer text-3xl lg:text-4xl mb-3"></i>
+        <h4 class="font-semibold text-base">Pilih sebuah catatan</h4>
+        <p class="text-sm mt-1">Pilih judul catatan di sebelah kiri untuk melihat isinya, atau buat catatan baru.</p>
+      </div>
+
+      <!-- Content View -->
+      <div id="note-content-view" class="hidden flex-grow flex flex-col min-h-0">
+        <div class="p-3 lg:p-4 border-b border-gray-200 flex justify-between items-center flex-shrink-0">
+          <h3 id="view-note-title" class="font-semibold text-gray-800 truncate pr-2">Judul Catatan</h3>
+          <div class="flex items-center gap-3 flex-shrink-0">
+            <button
+              id="pin-toggle-btn"
+              class="text-gray-500 hover:text-green-600 transition-colors p-1"
+              title="Pin Catatan"
+            >
+              <i class="fas fa-thumbtack fa-fw text-base"></i>
+            </button>
+            <button
+              id="edit-note-btn"
+              class="text-gray-500 hover:text-blue-600 transition-colors p-1"
+              title="Edit Catatan"
+            >
+              <i class="fas fa-pencil-alt fa-fw text-base"></i>
+            </button>
+            <button
+              id="delete-note-btn"
+              class="text-gray-500 hover:text-red-600 transition-colors p-1"
+              title="Hapus Catatan"
+            >
+              <i class="fas fa-trash-alt fa-fw text-base"></i>
+            </button>
+          </div>
+        </div>
+        <div id="view-note-text" class="flex-grow p-4 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap">
+          Isi dari catatan akan ditampilkan di sini.
+        </div>
+      </div>
+
+      <!-- Editor View -->
+      <div id="note-editor-view" class="hidden flex-grow flex flex-col min-h-0">
+        <div class="p-3 lg:p-4 border-b border-gray-200 flex-shrink-0">
+          <input
+            type="text"
+            id="editor-note-title"
+            placeholder="Judul Catatan..."
+            class="w-full text-base font-semibold border-b border-gray-300 focus:outline-none focus:border-purple-500 pb-2"
+          />
+        </div>
+        <div class="flex-grow p-4 overflow-hidden">
+          <textarea
+            id="editor-note-text"
+            class="w-full h-full text-sm border-none focus:outline-none focus:ring-0 resize-none"
+            placeholder="Tulis isi catatan di sini..."
+          ></textarea>
+        </div>
+        <div class="p-3 lg:p-4 bg-gray-50 border-t flex justify-end gap-3 flex-shrink-0">
+          <button
+            id="cancel-edit-btn"
+            class="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            id="save-note-btn"
+            class="px-4 py-2 text-sm text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition-colors"
+          >
+            Simpan Catatan
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %} {{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    let activeKontakId = null;
+    const contactListContainer = document.getElementById('contact-list-container');
+    const chatHeaderName = document.getElementById('chat-header-name');
+    const chatHeaderInfo = document.getElementById('chat-header-info');
+    const chatHeaderIcon = document.getElementById('chat-header-icon');
+    const chatMessagesContainer = document.getElementById('chat-messages-container');
+    const chatPlaceholder = document.getElementById('chat-placeholder');
+    // const chatInputArea = document.getElementById('chat-input-area'); // Diabaikan dulu
+
+    function renderChatMessages(kontakId, kontakNama) {
+        // Filter dispatch yang hanya terkait dengan kontak yang dipilih
+        const filteredDispatches = allDispatchesData
+            .filter(d => d.kontak_id == kontakId)
+            // Urutkan dari yang terlama ke terbaru (untuk tampilan chat)
+            .sort((a, b) => new Date(a.waktu_kirim) - new Date(b.waktu_kirim));
+
+        chatMessagesContainer.innerHTML = '';
+        if (filteredDispatches.length === 0) {
+            chatMessagesContainer.appendChild(chatPlaceholder);
+            return;
+        }
+
+        // Tampilkan riwayat dispatch sebagai gelembung chat
+        filteredDispatches.forEach(dispatch => {
+            const time = new Date(dispatch.waktu_kirim).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            const messageHtml = `
+                <div class="flex items-start gap-2 lg:gap-3 justify-end">
+                    <div class="flex flex-col items-end max-w-[85%] lg:max-w-md">
+                        <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-3 rounded-xl rounded-tr-none shadow-md">
+                            <p class="text-xs font-light text-blue-200 mb-1">Dispatch dari: ${dispatch.operator}</p>
+                            <p class="text-sm">Tipe: ${dispatch.tipe_kejadian || 'N/A'}</p>
+                            <p class="text-sm">${dispatch.instruksi}</p>
+                            <span class="text-xs text-blue-200 mt-1.5 block text-right">${time}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            chatMessagesContainer.insertAdjacentHTML('beforeend', messageHtml);
+        });
+
+        // Scroll ke bawah
+        chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+    }
+
+    function selectContact(kontakId, kontakNama, kontakNomor, element) {
+        // Hapus highlight dari kontak sebelumnya
+        document.querySelectorAll('.contact-item').forEach(el => {
+            el.classList.remove('bg-purple-100', 'font-semibold');
+        });
+
+        // Beri highlight pada kontak yang baru dipilih
+        if (element) {
+            element.classList.add('bg-purple-100', 'font-semibold');
+        }
+
+        activeKontakId = kontakId;
+        chatHeaderName.textContent = kontakNama;
+        chatHeaderInfo.textContent = `Nomor: ${kontakNomor}`;
+
+        // Update icon header
+        const initial = kontakNama.charAt(0).toUpperCase();
+        chatHeaderIcon.textContent = initial;
+        chatHeaderIcon.classList.remove('from-gray-300', 'to-gray-400');
+        chatHeaderIcon.classList.add('from-green-500', 'to-green-600');
+
+        renderChatMessages(kontakId, kontakNama);
+    }
+
+    // Listener untuk pemilihan kontak di Panel Kiri
+    contactListContainer.addEventListener('click', (e) => {
+        const targetItem = e.target.closest('.contact-item');
+        if (targetItem) {
+            const kontakId = targetItem.dataset.kontakId;
+            const kontakNama = targetItem.dataset.kontakNama;
+            const kontakNomor = targetItem.dataset.kontakNomor;
+            selectContact(kontakId, kontakNama, kontakNomor, targetItem);
+        }
+    });
+
+    // Opsional: Pilih kontak pertama secara default saat load
+    const firstContact = document.querySelector('.contact-item');
+    if (firstContact) {
+        firstContact.click();
+    }
+
+    const allMessagesData = [
+    {% for message in all_messages %}
+    {
+      type: "{{ message.type }}", // 'outgoing' atau 'incoming'
+      kontak_id: "{{ message.kontak.id }}",
+      kontak_instansi: "{{ message.kontak.instansi|e }}",
+      content: "{{ message.content|e }}",
+      timestamp: "{{ message.timestamp.isoformat() }}",
+      operator: "{{ message.operator or '' }}",
+    },
+    {% endfor %}
+  ];
+
+    let notesData = {
+      'note-1': {
+        title: 'Laporan Budi S.',
+        text: 'Jangan lupa follow up laporan dari Budi Santoso jam 10:31 AM.',
+        isPinned: false,
+      },
+      'note-2': {
+        title: 'Reminder CCTV',
+        text: 'Cek CCTV Pintu Masuk Utama secara berkala.',
+        isPinned: false,
+      },
+    };
+    let activeNoteId = null;
+
+    const noteListContainer = document.getElementById('note-list-container');
+    const addNewNoteBtn = document.getElementById('add-new-note-btn');
+    const searchInput = document.getElementById('search-notes-input');
+    const placeholderView = document.getElementById('note-placeholder');
+    const contentView = document.getElementById('note-content-view');
+    const editorView = document.getElementById('note-editor-view');
+    const viewTitle = document.getElementById('view-note-title');
+    const viewText = document.getElementById('view-note-text');
+    const editorTitle = document.getElementById('editor-note-title');
+    const editorText = document.getElementById('editor-note-text');
+    const editBtn = document.getElementById('edit-note-btn');
+    const deleteBtn = document.getElementById('delete-note-btn');
+    const saveBtn = document.getElementById('save-note-btn');
+    const cancelBtn = document.getElementById('cancel-edit-btn');
+    const pinToggleBtn = document.getElementById('pin-toggle-btn');
+
+    function renderNoteList() {
+      noteListContainer.innerHTML = '';
+      const searchTerm = searchInput.value.toLowerCase();
+
+      const filteredNotes = Object.entries(notesData).filter(([, note]) =>
+        note.title.toLowerCase().includes(searchTerm)
+      );
+
+      filteredNotes.sort(([, noteA], [, noteB]) => {
+        if (noteA.isPinned && !noteB.isPinned) return -1;
+        if (!noteA.isPinned && noteB.isPinned) return 1;
+        return noteA.title.localeCompare(noteB.title);
+      });
+
+      filteredNotes.forEach(([id, note]) => {
+        const button = document.createElement('button');
+        button.className =
+          'note-title-item w-full text-left p-2 rounded-lg hover:bg-gray-100 flex items-center transition-colors';
+        if (id === activeNoteId) {
+          button.classList.add('bg-purple-100', 'font-semibold');
+        }
+        button.dataset.noteId = id;
+
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-thumbtack text-xs text-purple-600 mr-2 fa-fw';
+        if (!note.isPinned) {
+          icon.style.visibility = 'hidden';
+        }
+        button.appendChild(icon);
+
+        const span = document.createElement('span');
+        span.className = 'font-medium text-sm text-gray-800 truncate';
+        span.innerText = note.title;
+        button.appendChild(span);
+
+        noteListContainer.appendChild(button);
+      });
+    }
+
+    function showView(viewToShow) {
+      placeholderView.classList.add('hidden');
+      contentView.classList.add('hidden');
+      editorView.classList.add('hidden');
+
+      if (viewToShow) {
+        viewToShow.classList.remove('hidden');
+        viewToShow.classList.add('flex', 'flex-col');
+      }
+    }
+
+    const allDispatchesData = [
+    {% for dispatch, kontak in all_dispatches %}
+    {
+      id: {{ dispatch.id }},
+      kontak_id: {{ kontak.id }},
+      instansi: "{{ kontak.instansi }}",
+      instruksi: "{{ dispatch.instruksi|e }}", // |e untuk escaping JS
+      waktu_kirim: "{{ dispatch.waktu_kirim.isoformat() }}",
+      operator: "{{ dispatch.operator.username }}",
+    },
+    {% endfor %}
+    ];
+
+    function updatePinButtonState() {
+      if (!pinToggleBtn) return;
+
+      if (activeNoteId && notesData[activeNoteId]) {
+        const note = notesData[activeNoteId];
+        pinToggleBtn.classList.remove('text-green-600', 'text-yellow-600', 'text-gray-500');
+
+        if (note.isPinned) {
+          pinToggleBtn.classList.add('text-green-600');
+          pinToggleBtn.title = 'Lepas Pin Catatan';
+        } else {
+          pinToggleBtn.classList.add('text-gray-500');
+          pinToggleBtn.title = 'Pin Catatan';
+        }
+      } else {
+        pinToggleBtn.classList.remove('text-green-600', 'text-yellow-600');
+        pinToggleBtn.classList.add('text-gray-500');
+        pinToggleBtn.title = 'Pin Catatan';
+      }
+    }
+
+    function selectNote(noteId) {
+      activeNoteId = noteId;
+      const note = notesData[noteId];
+
+      if (note) {
+        viewTitle.textContent = note.title;
+        viewText.textContent = note.text;
+        showView(contentView);
+        updatePinButtonState();
+      } else {
+        activeNoteId = null;
+        showView(placeholderView);
+      }
+      renderNoteList();
+    }
+
+    noteListContainer.addEventListener('click', (e) => {
+      const targetItem = e.target.closest('.note-title-item');
+      if (targetItem) {
+        const noteId = targetItem.dataset.noteId;
+        selectNote(noteId);
+      }
+    });
+
+    addNewNoteBtn.addEventListener('click', () => {
+      activeNoteId = null;
+      editorTitle.value = '';
+      editorText.value = '';
+      showView(editorView);
+      editorTitle.focus();
+    });
+
+    editBtn.addEventListener('click', () => {
+      const note = notesData[activeNoteId];
+      if (note) {
+        editorTitle.value = note.title;
+        editorText.value = note.text;
+        showView(editorView);
+        editorTitle.focus();
+      }
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      if (activeNoteId && notesData[activeNoteId]) {
+        selectNote(activeNoteId);
+      } else {
+        showView(placeholderView);
+      }
+    });
+
+    saveBtn.addEventListener('click', () => {
+      const title = editorTitle.value.trim();
+      const text = editorText.value.trim();
+
+      if (!title) {
+        alert('Judul tidak boleh kosong.');
+        return;
+      }
+
+      if (activeNoteId) {
+        notesData[activeNoteId].title = title;
+        notesData[activeNoteId].text = text;
+      } else {
+        const newId = 'note-' + Date.now();
+        notesData[newId] = { title, text, isPinned: false };
+        activeNoteId = newId;
+      }
+
+      selectNote(activeNoteId);
+    });
+
+    deleteBtn.addEventListener('click', () => {
+      if (activeNoteId && confirm(`Anda yakin ingin menghapus catatan "${notesData[activeNoteId].title}"?`)) {
+        delete notesData[activeNoteId];
+        activeNoteId = null;
+        renderNoteList();
+        showView(placeholderView);
+      }
+    });
+
+    pinToggleBtn.addEventListener('click', () => {
+      if (activeNoteId && notesData[activeNoteId]) {
+        notesData[activeNoteId].isPinned = !notesData[activeNoteId].isPinned;
+        updatePinButtonState();
+        renderNoteList();
+      }
+    });
+
+    searchInput.addEventListener('input', renderNoteList);
+
+    renderNoteList();
+    showView(placeholderView);
+
+    let selectedInstansi = {
+        id: null, // BARU: Simpan ID DB
+        nama: null,
+        nomor: null,
+        element: null
+    };
+
+    const dispatchInstructionsTextarea = document.querySelector('textarea[placeholder="Masukkan instruksi dispatch..."]');
+    const sendDispatchBtn = document.querySelector('button[data-translate="send-dispatch"]');
+    const instansiButtons = document.querySelectorAll('.instansi-button');
+    const tipeSelect = document.querySelector('select'); // Ambil elemen select
+
+    // 1. Logika memilih instansi
+    instansiButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Hapus highlight dari tombol sebelumnya
+            if (selectedInstansi.element) {
+                selectedInstansi.element.classList.remove('ring-2', 'ring-offset-2', 'ring-purple-500');
+            }
+
+            // Set instansi yang baru dipilih
+            selectedInstansi.id = this.dataset.kontakId; // AMBIL ID BARU
+            selectedInstansi.nama = this.dataset.instansiNama;
+            selectedInstansi.nomor = this.dataset.nomorTelp;
+            selectedInstansi.element = this;
+
+            // Beri highlight pada tombol yang baru dipilih
+            this.classList.add('ring-2', 'ring-offset-2', 'ring-purple-500');
+
+            console.log(`Instansi dipilih: ID=${selectedInstansi.id}, Nama=${selectedInstansi.nama}`);
+        });
+    });
+
+    // 2. Logika tombol Kirim Dispatch
+    sendDispatchBtn.addEventListener('click', async function() {
+        const instruksi = dispatchInstructionsTextarea.value.trim();
+        const tipe = tipeSelect.value;
+
+        if (!selectedInstansi.id) {
+            alert('Mohon pilih Instansi Darurat terlebih dahulu.');
+            return;
+        }
+
+        if (!instruksi) {
+            alert('Mohon masukkan Instruksi Dispatch.');
+            return;
+        }
+
+        // Tampilkan loading/disable tombol
+        sendDispatchBtn.disabled = true;
+        sendDispatchBtn.textContent = 'Mengirim...';
+
+        const dispatchData = {
+            kontak_id: selectedInstansi.id,
+            tipe_kejadian: tipe,
+            instruksi: instruksi
+        };
+
+        try {
+            const response = await fetch('{{ url_for('admin.send_dispatch') }}', { // Pastikan rute API Anda benar
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Jika Anda menggunakan CSRF token di Flask, Anda perlu menyertakannya di sini
+                },
+                body: JSON.stringify(dispatchData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert(result.message + ` (Nomor WA: ${result.nomor_telp})`);
+
+                // Opsional: Buka link WhatsApp setelah sukses (nomor sudah di format 62...)
+                // window.open(`https://wa.me/${result.nomor_telp}?text=${encodeURIComponent(instruksi)}`, '_blank');
+
+                // Reset form
+                dispatchInstructionsTextarea.value = '';
+                // Hapus highlight
+                if (selectedInstansi.element) {
+                    selectedInstansi.element.classList.remove('ring-2', 'ring-offset-2', 'ring-purple-500');
+                    selectedInstansi.id = null;
+                    selectedInstansi.nama = null;
+                    selectedInstansi.nomor = null;
+                    selectedInstansi.element = null;
+                }
+
+            } else {
+                alert('Gagal mencatat dispatch: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Error saat mengirim dispatch:', error);
+            alert('Terjadi kesalahan jaringan atau server.');
+        } finally {
+            // Kembalikan tombol ke keadaan semula
+            sendDispatchBtn.disabled = false;
+            sendDispatchBtn.textContent = 'Kirim Dispatch';
+        }
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,140 @@
+import os
+import secrets
+from datetime import datetime, timedelta
+from flask import current_app
+from . import db
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+
+
+# ===================================================================
+# == MODEL CCTV (SQLAlchemy) - TIDAK DIUBAH
+# ===================================================================
+class CCTV(db.Model):
+    __tablename__ = "cctv"
+    id = db.Column(db.Integer, primary_key=True)
+    lokasi = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), default="Aktif")
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
+    video_url = db.Column(db.String(500), nullable=True)
+    camera_type = db.Column(db.String(100), nullable=True)
+    stream_url = db.Column(db.String(500), nullable=True)
+    type = db.Column(db.String(100), nullable=True)
+
+    def __repr__(self):
+        return f"<CCTV {self.lokasi}>"
+
+
+# ===================================================================
+# == MODEL BARU UNTUK DATA PETA DAN BATAS
+# ===================================================================
+
+
+class BatasWilayah(db.Model):
+    """
+    Model untuk menyimpan data batas wilayah (Kabupaten dan Kota).
+    Data geometrinya disimpan dalam format GeoJSON di kolom 'geojson'.
+    """
+
+    __tablename__ = "batas_wilayah"
+    id = db.Column(db.Integer, primary_key=True)
+    nama = db.Column(db.String(255), nullable=False)
+    # Jenis bisa 'Kabupaten' atau 'Kota'
+    jenis = db.Column(db.String(50), nullable=False, index=True)
+    geojson = db.Column(
+        db.Text, nullable=True
+    )  # Untuk menyimpan data koordinat poligon
+    keterangan = db.Column(db.String(500), nullable=True)
+
+    def __repr__(self):
+        return f"<BatasWilayah {self.nama}>"
+
+
+# ===================================================================
+# == MODEL KONTAK DARURAT (BARU)
+# ===================================================================
+class Kontak(db.Model):
+    """
+    Model untuk menyimpan data kontak darurat (instansi, nomor, dan ikon).
+    """
+
+    __tablename__ = "kontak"
+    id = db.Column(db.Integer, primary_key=True)
+    instansi = db.Column(db.String(100), nullable=False)
+    nomor_telp = db.Column(db.String(20), nullable=False)
+    # Icon bisa berupa class Font Awesome (e.g., 'fas fa-ambulance')
+
+    def __repr__(self):
+        return f"<Kontak {self.instansi}: {self.nomor_telp}>"
+
+
+# app/models.py
+
+# ... (Model User, CCTV, Kontak, dll. yang sudah ada)
+
+
+class Dispatch(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Foreign Key ke tabel Kontak (Sudah ada)
+    kontak_id = db.Column(db.Integer, db.ForeignKey("kontak.id"), nullable=False)
+
+
+    operator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Kolom data
+    tipe_dispatch = db.Column(db.String(50), nullable=False)
+    instruksi = db.Column(db.Text, nullable=False)
+    waktu_kirim = db.Column(db.DateTime, default=db.func.current_timestamp())
+    status = db.Column(db.String(50), default="Terkirim")
+
+    # Relasi
+    kontak = db.relationship("Kontak", backref=db.backref("dispatches", lazy=True))
+    operator = db.relationship(
+        "User", backref=db.backref("sent_dispatches", lazy=True)
+    )  # <--- BARU
+
+    def __repr__(self):
+        return f"Dispatch('{self.tipe_dispatch}', '{self.instruksi[:20]}...')"
+
+
+# ===================================================================
+# == MODEL USER (SQLAlchemy) - TIDAK DIUBAH
+# ===================================================================
+class User(db.Model, UserMixin):
+    __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="operator")
+
+    reset_token = db.Column(db.String(100), unique=True, nullable=True)
+    reset_token_expiration = db.Column(db.DateTime, nullable=True)
+    otp_secret = db.Column(db.String(6), nullable=True)
+    otp_expiration = db.Column(db.DateTime, nullable=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def get_reset_token(self, expires_sec=1800):
+        self.reset_token = secrets.token_urlsafe(20)
+        self.reset_token_expiration = datetime.utcnow() + timedelta(seconds=expires_sec)
+        return self.reset_token
+
+    @staticmethod
+    def verify_reset_token(token):
+        user = User.query.filter_by(reset_token=token).first()
+        if user and user.reset_token_expiration > datetime.utcnow():
+            return user
+        return None
+
+    def __repr__(self):
+        return f"<User {self.username}>"
+

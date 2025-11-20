@@ -1,0 +1,126 @@
+{% extends "admin/base.html" %} {% block title %}Riwayat{% endblock %} {% block styles %} {% endblock %} {% block
+page_title %}Riwayat{% endblock %} {% block page_subtitle %}Lihat Riwayat Deteksi dan Chat Center{% endblock %} {#
+============================================== #} {# == BLOK BARU UNTUK NOTIFIKASI DI HEADER == #} {#
+============================================== #} {% block header_extra %}
+{% endblock %} {# ============================================== #} {# == AKHIR BLOK HEADER EXTRA == #} {#
+============================================== #} {% block content %}
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+  <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200">
+    <h2 class="text-lg font-semibold text-gray-800">Riwayat Dispatch</h2>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead class="bg-gray-50 border-b border-gray-200">
+        <tr>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Waktu</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Terkait</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Instruksi</th>
+          <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operator</th>
+          <th class="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for dispatch, kontak, operator in all_dispatches %}
+        <tr class="transition-colors hover:bg-gray-50">
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+            {{ dispatch.waktu_kirim.strftime('%d/%m/%Y %H:%M %p') }}
+          </td>
+
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
+            >
+              {{ kontak.instansi }}
+            </span>
+          </td>
+
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+            {% set tipe_color = 'red' if dispatch.tipe_dispatch == 'Darurat' else 'blue' %}
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-{{ tipe_color }}-100 text-{{ tipe_color }}-800"
+            >
+              {{ dispatch.tipe_dispatch }}
+            </span>
+          </td>
+
+          <td class="px-6 py-4 text-sm text-gray-700 max-w-xs truncate" title="{{ dispatch.instruksi }}">
+            {{ dispatch.instruksi }}
+          </td>
+
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ operator.username.capitalize() }}</td>
+
+          {# ========== KOLOM AKSI BARU ========== #}
+          <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+            <form 
+                method="POST" 
+                action="{{ url_for('admin.delete_dispatch', dispatch_id=dispatch.id) }}"
+                {# HAPUS: onsubmit="return confirm('...')" #}
+            >
+                {{ form.hidden_tag() }} 
+                <button
+                    type="submit"
+                    class="text-red-600 hover:text-red-900 transition-colors p-2 rounded hover:bg-red-50 delete-dispatch-btn"
+                    title="Hapus Dispatch"
+                >
+                    <i class="fas fa-trash-alt text-base"></i>
+                </button>
+            </form>
+          </td>
+          {# ===================================== #}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="px-6 py-8 text-center text-gray-500">Belum ada riwayat dispatch yang tercatat.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  // ========== KONFIGURASI AWAL (DARI JINJA2) ==========
+    // Variabel global ini akan dibaca oleh file monitoring.js
+    {% if default_camera %}
+    const INDEKS_KAMERA_AKTIF = {{ default_camera.index }};
+    const LOKASI_KAMERA = "{{ default_camera.location }}";
+    {% else %}
+    const INDEKS_KAMERA_AKTIF = null;
+    const LOKASI_KAMERA = "Tidak Ada Kamera";
+    {% endif %}
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // Cari semua tombol hapus
+    document.querySelectorAll('.delete-dispatch-btn').forEach((button) => {
+      button.addEventListener('click', function (e) {
+        // Mencegah form submit default
+        e.preventDefault();
+
+        // Dapatkan elemen form terdekat (form di mana tombol ini berada)
+        const form = this.closest('form');
+
+        Swal.fire({
+          title: 'Anda Yakin?',
+          text: 'Riwayat dispatch ini akan dihapus permanen.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#3085d6',
+          confirmButtonText: 'Ya, Hapus!',
+          cancelButtonText: 'Batal',
+        }).then((result) => {
+          if (result.isConfirmed) {
+            // Jika pengguna mengklik "Ya, Hapus!", submit form
+            form.submit();
+          }
+        });
+      });
+    });
+  });
+</script>
+<script src="{{ url_for('static', filename='js/admin/monitoring.js') }}"></script>
+{% endblock %}

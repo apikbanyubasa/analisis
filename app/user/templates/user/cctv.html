@@ -1,0 +1,538 @@
+{% extends "base.html" %} 
+{% block title %}Peta CCTV{% endblock %} 
+{% block head %} 
+{{ super() }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+<script src="https://unpkg.com/@mapbox/leaflet-pip@1.1.0/leaflet-pip.js"></script>
+<style>
+  #map {
+  width: 100%;
+  height: 100vh;
+  z-index: 0;
+  background-color: transparent !important;
+  }
+
+  .leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .leaflet-container img {
+    max-width: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .cctv-preview-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .cctv-preview-scrollbar::-webkit-scrollbar-track {
+    background: #f0f0f0;
+  }
+  .cctv-preview-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #000000;
+    border-radius: 20px;
+    border: 2px solid #ffffff;
+  }
+
+  @media (min-width: 1025px) {
+    .top-bar-responsive > div {
+      width: 100% !important;
+      max-width: 235px !important;
+    }
+  }
+
+  /* ================== 📱 Mobile & Tablet (<= 900px) ================== */
+  @media (max-width: 900px) {
+    /* Force body scroll */
+    body {
+      overflow-y: auto !important;
+      height: auto !important;
+    }
+
+    /* Map tampil atas dengan height yang lebih proporsional */
+    #map {
+      height: 35vh !important;
+      position: relative !important;
+      border-radius: 0 0 16px 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Container utama - FORCE SCROLL */
+    .dashboard-stack {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 16px;
+      position: relative !important;
+      margin-top: 0;
+      padding: 16px;
+      padding-top: 60px;
+      padding-bottom: 100px; /* Banyak space di bawah */
+      background: linear-gradient(to bottom, #f8fafc, #e2e8f0);
+      min-height: 150vh !important; /* Paksa tinggi lebih dari viewport */
+      z-index: 20;
+      overflow: visible !important;
+    }
+
+    /* Override burger button untuk mobile - selalu di pojok kanan atas */
+    button[class*="burger"] {
+      position: fixed !important;
+      top: 16px !important;
+      right: 16px !important;
+      z-index: 150 !important;
+      background: rgba(20, 27, 53, 0.95) !important;
+      backdrop-filter: blur(10px);
+      border-radius: 12px !important;
+      padding: 12px !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s ease;
+      width: auto !important;
+      height: auto !important;
+    }
+
+    button[class*="burger"]:hover {
+      background: rgba(20, 27, 53, 1) !important;
+      transform: scale(1.05);
+    }
+
+    /* Search + filter - layout yang lebih baik */
+    .top-bar-responsive {
+      flex-direction: column !important;
+      gap: 12px;
+      width: 100% !important;
+      position: relative !important;
+      left: 0 !important;
+      top: 0 !important;
+      order: 1;
+      margin-right: 60px; /* Space untuk burger button */
+    }
+
+    .top-bar-responsive > div {
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .top-bar-responsive > div:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Search input styling */
+    .top-bar-responsive input {
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: none;
+      font-size: 16px; /* Prevent zoom on iOS */
+    }
+
+    .top-bar-responsive button {
+      padding: 12px 16px;
+      border-radius: 12px;
+    }
+
+    /* Dropdown styling */
+    .top-bar-responsive .relative > div:first-child {
+      padding: 14px 16px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    /* CCTV Feeds - ukuran yang lebih kecil */
+    .cctv-sidebar {
+      position: relative !important;
+      width: 100% !important;
+      height: auto !important;
+      order: 2;
+      flex-shrink: 0; /* Jangan shrink */
+    }
+
+    .cctv-sidebar > div {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 250px;
+      max-height: 35vh;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+    }
+
+    .cctv-sidebar .px-2.py-2 {
+      padding: 16px 20px;
+      color: white;
+      border-radius: 16px 16px 0 0;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .cctv-sidebar .border-t {
+      padding: 12px 20px;
+      background: #f8fafc;
+      border-radius: 0 0 16px 16px;
+      font-weight: 500;
+      color: #64748b;
+      border-top: 2px solid #e2e8f0;
+    }
+
+    /* Video Deteksi - styling normal setelah debug berhasil */
+    .video-deteksi {
+      position: relative !important;
+      top: auto !important;
+      right: auto !important;
+      left: auto !important;
+      width: 100% !important;
+      order: 3 !important;
+      z-index: 25 !important;
+      margin-top: 20px !important;
+      margin-bottom: 100px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      min-height: 300px !important;
+      flex-shrink: 0 !important;
+    }
+
+    .video-deteksi > div {
+      width: 100% !important;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.95) !important; /* sama dengan .cctv-sidebar */
+      backdrop-filter: blur(10px);
+      overflow: hidden !important;
+      display: flex !important;
+      flex-direction: column !important;
+      min-height: 250px !important;
+    }
+
+    /* Header video deteksi - samain dengan header CCTV */
+    .video-deteksi .px-2.py-2 {
+      padding: 16px 20px;
+      color: white !important;
+      border-radius: 16px 16px 0 0 !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.5px;
+      font-size: 14px;
+    }
+
+    /* Footer / info bagian bawah */
+    .video-deteksi .border-t {
+      padding: 12px 20px;
+      background: #f8fafc !important;
+      border-radius: 0 0 16px 16px;
+      font-weight: 500;
+      color: #64748b;
+      border-top: 2px solid #e2e8f0;
+    }
+
+    /* Filter dropdown improvements */
+    #filter-status, #filter-kecamatan-content {
+      border-radius: 0 0 12px 12px !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+      border: 1px solid #e2e8f0 !important;
+      margin-top: 1px;
+    }
+
+    #filter-status > div, #filter-kecamatan-content li {
+      padding: 12px 16px;
+      transition: background-color 0.2s ease;
+      border-radius: 8px;
+      margin: 4px 8px;
+    }
+
+    #filter-status > div:hover, #filter-kecamatan-content li:hover {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white;
+      transform: translateX(4px);
+    }
+  }
+
+  /* ================== 📱 Phone specific (<= 480px) ================== */
+  @media (max-width: 480px) {
+    #map {
+      height: 35vh !important;
+      border-radius: 0 0 12px 12px;
+    }
+
+    .dashboard-stack {
+      padding: 12px;
+      gap: 12px;
+    }
+
+    .burger-menu {
+      padding: 10px !important;
+      top: 12px !important;
+      right: 12px !important;
+    }
+
+    .cctv-sidebar > div {
+      min-height: 300px;
+      max-height: 45vh;
+    }
+
+    .video-deteksi .p-2 {
+      padding: 16px;
+    }
+
+    .video-deteksi .p-2 > div {
+      margin-bottom: 12px; /* Spacing antar video di phone */
+    }
+
+    .top-bar-responsive > div {
+      border-radius: 8px;
+    }
+
+    .cctv-sidebar > div, .video-deteksi > div {
+      border-radius: 12px;
+    }
+  }
+
+  /* ================== 💻 Desktop (>= 901px) ================== */
+  @media (min-width: 901px) {
+    .dashboard-stack {
+      display: block;
+    }
+
+    #map {
+      position: fixed;
+      height: 100vh;
+    }
+
+    /* Pastikan burger button tetap muncul di desktop dengan posisi original */
+    .burger-menu {
+      /* Styling asli desktop tetap ada */
+    }
+
+    /* Subtle hover effects for desktop */
+    .top-bar-responsive > div:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .cctv-sidebar > div:hover, .video-deteksi > div:hover {
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    }
+  }
+
+  /* Smooth transitions untuk semua elemen */
+  .top-bar-responsive, .cctv-sidebar, .video-deteksi, 
+  .top-bar-responsive > div, .burger-menu {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Loading states */
+  .video-deteksi img, .cctv-sidebar img {
+    transition: opacity 0.3s ease;
+  }
+
+  .video-deteksi img:hover, .cctv-sidebar img:hover {
+    opacity: 0.9;
+  }
+
+  /* Accessibility improvements */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+
+{% endblock %} 
+
+{% block content %}
+
+<div id="map" class="fixed inset-0 z-0"></div>
+
+<div class="dashboard-stack">
+
+<button
+  @click="sidebarOpen = true"
+  x-show="!sidebarOpen"
+  class="focus:outline-none absolute top-4 right-4 z-40 p-[8px] bg-[#141B35] text-white rounded shadow burger-menu"
+>
+  <img
+    src="{{ url_for('static', filename='img/burger.svg') }}"
+    alt="Menu Icon"
+    class="h-4 w-4"
+  />
+</button>
+
+<!-- 🔹 TOP BAR: Search & Filters -->
+<div
+  class="absolute top-4 left-[300px] z-30 flex space-x-3 transition-all duration-300 top-bar-responsive"
+  :class="{ 'left-[280px]': sidebarOpen, 'left-[360px]': !sidebarOpen }"
+>
+
+  <!-- Search -->
+  <div class="flex items-center bg-white shadow-md rounded p-1 w-[235px]">
+    <input
+      type="text"
+      id="search-input"
+      placeholder="Cari CCTV..."
+      class="px-1 focus:outline-none flex-1 rounded"
+    />
+    <button id="search-button" class="pr-1">
+      <img
+        src="{{ url_for('static', filename='img/search.svg') }}"
+        alt="Search Icon"
+        class="h-5 w-5"
+      />
+    </button>
+  </div>
+
+  <!-- Filter Status -->
+  <div
+    id="status-filter-container"
+    class="w-[235px] bg-white shadow-md rounded relative px-1"
+  >
+    <div
+      id="toggle-status-button"
+      class="flex justify-between items-center p-1 cursor-pointer font-normal"
+    >
+      Filter Status CCTV
+      <img
+        id="status-arrow"
+        src="{{ url_for('static', filename='img/lower_arrow.svg') }}"
+        alt="Arrow"
+        class="w-5 h-5 inline-block transition-transform duration-200"
+      />
+    </div>
+    <div
+      id="filter-status"
+      class="absolute left-0 right-0 bg-white px-2 py-1 hidden space-y-2 font-light shadow-lg z-50 border-t border-gray-300"
+    >
+      <div class="flex justify-between items-center">
+        <span>CCTV Aktif</span>
+        <label class="relative inline-block w-9 h-5">
+          <input
+            type="checkbox"
+            id="toggle-aktif"
+            checked
+            class="opacity-0 w-0 h-0 peer"
+          />
+          <span
+            class="absolute inset-0 bg-gray-300 rounded-full peer-checked:bg-gray-900 transition duration-300 before:content-[''] before:absolute before:h-3.5 before:w-3.5 before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition before:duration-300 peer-checked:before:translate-x-4"
+          ></span>
+        </label>
+      </div>
+      <div class="flex justify-between items-center">
+        <span>CCTV Non-Aktif</span>
+        <label class="relative inline-block w-9 h-5">
+          <input
+            type="checkbox"
+            id="toggle-nonaktif"
+            checked
+            class="opacity-0 w-0 h-0 peer"
+          />
+          <span
+            class="absolute inset-0 bg-gray-300 rounded-full peer-checked:bg-gray-900 transition duration-300 before:content-[''] before:absolute before:h-3.5 before:w-3.5 before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition before:duration-300 peer-checked:before:translate-x-4"
+          ></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Kecamatan -->
+  <div
+    id="kecamatan-filter-container"
+    class="w-[235px] bg-white shadow-md rounded relative px-1"
+  >
+    <div
+      id="toggle-kecamatan-button"
+      class="flex justify-between items-center p-1 cursor-pointer font-normal"
+    >
+      <span id="filter-kecamatan-label">Filter Kecamatan</span>
+      <img
+        id="kecamatan-arrow"
+        src="{{ url_for('static', filename='img/lower_arrow.svg') }}"
+        alt="Arrow"
+        class="w-5 h-5 inline-block transition-transform duration-200"
+      />
+    </div>
+    <div
+      id="filter-kecamatan-content"
+      class="absolute left-0 right-0 bg-white px-2 py-1 hidden font-light shadow-lg z-50 border-t border-gray-300"
+    >
+    <ul id="kecamatan-list" class="divide-y divide-gray-200 max-h-60 overflow-y-auto">
+      <li class="px-2 py-1 hover:bg-gray-100 cursor-pointer" data-kecamatan="semua">-- Semua --</li>
+      <li class="px-2 py-1 hover:bg-gray-100 cursor-pointer" data-kecamatan="Bogor Utara">Bogor Utara</li>
+      <li class="px-2 py-1 hover:bg-gray-100 cursor-pointer" data-kecamatan="Bogor Selatan">Bogor Selatan</li>
+      <li class="px-2 py-1 hover:bg-gray-100 cursor-pointer" data-kecamatan="Bogor Barat">Bogor Barat</li>
+      <li class="px-2 py-1 hover:bg-gray-100 cursor-pointer" data-kecamatan="Bogor Timur">Bogor Timur</li>
+      <li class="px-2 py-1 hover:bg-gray-100 cursor-pointer" data-kecamatan="Bogor Tengah">Bogor Tengah</li>
+      <li class="px-2 py-1 hover:bg-gray-100 cursor-pointer" data-kecamatan="Tanah Sereal">Tanah Sereal</li>
+    </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 🔹 SIDEBAR CCTV Feeds -->
+<div class="absolute top-4 left-4 z-10 space-y-2 cctv-sidebar">
+  <div
+    class="w-[235px] h-[calc(100vh-30px)] bg-white shadow-md rounded flex flex-col"
+  >
+    <div class="px-2 py-2 h-[32px] flex items-center border-b border-gray-300">
+      <h2 class="font-normal text-black">CCTV Feeds</h2>
+    </div>
+
+    <div
+      id="cctv-preview-list"
+      class="p-2 space-y-3 overflow-y-auto cctv-preview-scrollbar flex-1"
+    ></div>
+
+    <div class="px-2 py-2 border-t h-[32px] border-gray-300 text-xs text-black">
+      Aktif: <span id="cctv-active-count">0</span> | Nonaktif:
+      <span id="cctv-nonaktif-count">0</span>
+    </div>
+  </div>
+</div>
+
+<!-- 🔹 SIDEBAR KANAN: Video Deteksi mirip CCTV Feeds -->
+<div
+  class="absolute top-4 right-20 z-10 transition-all duration-300 video-deteksi"
+  :class="{ 'right-[260px]': sidebarOpen, 'right-20': !sidebarOpen }"
+>
+  <div class="w-[235px] bg-white shadow-md rounded flex flex-col">
+    <div class="px-2 py-2 h-[32px] flex items-center border-b border-gray-300">
+      <h2 class="font-normal text-black">Video Deteksi</h2>
+    </div>
+
+    {% if preview_cctvs %}
+      {% for cctv in preview_cctvs %}
+      <div class="p-2">
+        <div class="rounded overflow-hidden shadow bg-black">
+          <img src="{{ url_for('user.video_feed_preview', cctv_id=cctv.id) }}"
+               class="w-full h-[130px] object-cover"
+               alt="Preview Deteksi {{ cctv.lokasi }}"/>
+        </div>
+        <div class="mt-1 text-sm font-medium text-gray-800 truncate" title="{{ cctv.lokasi }}">{{ cctv.lokasi }}</div>
+        <div class="text-xs text-gray-500">Realtime Detection</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="p-4 text-center text-gray-500 text-sm">
+        Tidak ada stream CCTV aktif yang tersedia untuk preview.
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script id="cctv-data" type="application/json">
+  {{ cctv_markers | tojson }}
+</script>
+<script id="batas-data" type="application/json">
+  {{ batas_wilayah_data | tojson }}
+</script>
+<script src="{{ url_for('static', filename='js/user/cctv.js') }}"></script>
+
+{% endblock %}

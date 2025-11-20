@@ -1,0 +1,888 @@
+{% extends "admin/base.html" %} {% block title %}Deteksi{% endblock %} {% block styles %} {% endblock %} {% block
+page_title %}Deteksi{% endblock %} {% block page_subtitle %}Pantau CCTV Secara Real-time{% endblock %} {% block content
+%}
+<div class="bg-gray-50 pb-6">
+  <div class="mb-6 border-b border-gray-200">
+    <nav class="flex -mb-px space-x-8" aria-label="Tabs">
+      <a
+        href="#tab-kerumunan"
+        class="tab-link border-purple-600 text-purple-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+        aria-current="page"
+      >
+        Deteksi Kerumunan
+      </a>
+
+      <a
+        href="#tab-parkir-liar"
+        class="tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Deteksi Pelanggaran Lalu Lintas
+      </a>
+
+      <a
+        href="#tab-plat-nomor"
+        class="tab-link border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+      >
+        Deteksi Plat Nomor
+      </a>
+    </nav>
+  </div>
+
+  <div id="tab-kerumunan" class="tab-content">
+    <div class="grid grid-cols-12 gap-6">
+      <div class="col-span-3">
+        <div
+          class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden flex flex-col h-[calc(100vh-280px)]"
+        >
+          <div class="p-5 flex-shrink-0 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center">
+              <i class="fas fa-video text-purple-600 mr-2"></i>
+              Daftar CCTV
+            </h2>
+          </div>
+          <div class="p-4 flex-shrink-0 border-b border-gray-100">
+            <div class="relative">
+              <input
+                type="text"
+                id="search-kerumunan"
+                placeholder="Cari lokasi kamera..."
+                class="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-sm"
+              />
+              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+          </div>
+          <div
+            class="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100"
+          >
+            <div class="space-y-3" id="daftar-kamera"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-6 flex flex-col gap-4">
+        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl p-5 shadow-lg flex-1">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center" id="judulKamera">
+              <i class="fas fa-camera text-purple-600 mr-2"></i>
+              {% if default_camera %} {{ default_camera.location }} {% else %} Tidak Ada Kamera Aktif {% endif %}
+            </h2>
+          </div>
+          <div
+            class="relative bg-gray-800 rounded-xl overflow-hidden border-2 border-purple-600/30"
+            style="height: calc(100vh - 470px)"
+          >
+            {% if default_camera %}
+            <img
+              src="{{ url_for('admin.crowd_video_stream', camera_id=default_camera.id) }}"
+              alt="Streaming CCTV Deteksi Kerumunan"
+              class="w-full h-full object-cover"
+              id="videoUtama"
+            />
+            {% else %}
+            <div class="w-full h-full flex items-center justify-center">
+              <div class="text-center">
+                <img
+                  src="{{ url_for('static', filename='img/cam_dead.svg') }}"
+                  alt="Tidak Ada Kamera"
+                  class="w-20 h-20 mx-auto mb-3 opacity-50"
+                />
+                <p class="text-gray-400">Tidak ada kamera aktif</p>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-4 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-2">
+              <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"
+                />
+              </svg>
+              <span class="text-xs text-green-600 font-semibold">+12%</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="kerumunan_total_people"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Jumlah Orang</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-4 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-2">
+              <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+              </svg>
+              <span class="text-xs text-green-600 font-semibold">+3%</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="kerumunan_crowd_size"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Kejadian Gerakan</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-4 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-2">
+              <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                />
+              </svg>
+              <span class="text-xs text-yellow-600 font-semibold">+2</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="kerumunan_peringatanAktif"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Peringatan Aktif</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-3">
+        <div
+          class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden flex flex-col h-[calc(100vh-280px)]"
+        >
+          <div class="p-5 flex-shrink-0 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center">
+              <i class="fas fa-bell text-purple-600 mr-2"></i>
+              Log Notifikasi
+            </h2>
+          </div>
+          <div
+            class="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100"
+          >
+            <div class="space-y-3" id="daftarNotifikasi"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-parkir-liar" class="tab-content hidden">
+    <div class="grid grid-cols-12 gap-6">
+      <div class="col-span-3">
+        <div
+          class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden flex flex-col h-[calc(100vh-280px)]"
+        >
+          <div class="p-5 flex-shrink-0 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center">
+              <i class="fas fa-video text-purple-600 mr-2"></i>
+              Daftar CCTV
+            </h2>
+          </div>
+          <div class="p-4 flex-shrink-0 border-b border-gray-100">
+            <div class="relative">
+              <input
+                type="text"
+                id="search-parkir"
+                placeholder="Cari lokasi kamera..."
+                class="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-sm"
+              />
+              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+          </div>
+          <div
+            class="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100"
+          >
+            <div class="space-y-3" id="daftar-kamera-parkir"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-6 flex flex-col gap-4">
+        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl p-5 shadow-lg flex-1">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center" id="judulKamera-parkir-liar">
+              <i class="fas fa-camera text-purple-600 mr-2"></i>
+              {% if default_camera %} {{ default_camera.location }} {% else %} Tidak Ada Kamera Aktif {% endif %}
+            </h2>
+          </div>
+          <div
+            class="relative bg-gray-800 rounded-xl overflow-hidden border-2 border-purple-600/30"
+            style="height: calc(100vh - 470px)"
+          >
+            {% if default_camera %}
+            <img
+              src="{{ url_for('admin.parking_video_stream', camera_id=default_camera.id) }}"
+              alt="Streaming CCTV Deteksi Pelanggaran Lalu Lintas"
+              class="w-full h-full object-cover"
+              id="videoUtama-parkir-liar"
+            />
+            {% else %}
+            <div class="w-full h-full flex items-center justify-center">
+              <div class="text-center">
+                <img
+                  src="{{ url_for('static', filename='img/cam_dead.svg') }}"
+                  alt="Tidak Ada Kamera"
+                  class="w-20 h-20 mx-auto mb-3 opacity-50"
+                />
+                <p class="text-gray-400">Tidak ada kamera aktif</p>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-4">
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <i class="fas fa-parking text-purple-600 text-sm"></i>
+              <span class="text-xs text-red-600 font-semibold" id="parkir_parking_violations_change">+12</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="parkir_parking_violations"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Parkir Liar</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <i class="fas fa-truck-moving text-purple-600 text-sm"></i>
+              <span class="text-xs text-red-600 font-semibold" id="parkir_odol_detections_change">3%</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="parkir_odol_detections"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Deteksi ODOL</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <i class="fas fa-bell text-purple-600 text-sm"></i>
+              <span class="text-xs text-yellow-600 font-semibold" id="parkir_zonaPeringatan_change">!12</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="parkir_zonaPeringatan"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Peringatan Aktif</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <i class="fas fa-ban text-purple-600 text-sm"></i>
+              <span class="text-xs text-red-600 font-semibold" id="parkir_pelanggaranTotal_change">+0</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="parkir_pelanggaranTotal"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Total Pelanggaran</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-3">
+        <div
+          class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden flex flex-col h-[calc(100vh-280px)]"
+        >
+          <div class="p-5 flex-shrink-0 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center">
+              <i class="fas fa-bell text-purple-600 mr-2"></i>
+              Log Notifikasi
+            </h2>
+          </div>
+          <div
+            class="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100"
+          >
+            <div class="space-y-3" id="daftarNotifikasi-parkir"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-plat-nomor" class="tab-content hidden">
+    <div class="grid grid-cols-12 gap-6">
+      <div class="col-span-3">
+        <div
+          class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden flex flex-col h-[calc(100vh-280px)]"
+        >
+          <div class="p-5 flex-shrink-0 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center">
+              <i class="fas fa-video text-purple-600 mr-2"></i>
+              Daftar CCTV
+            </h2>
+          </div>
+          <div class="p-4 flex-shrink-0 border-b border-gray-100">
+            <div class="relative">
+              <input
+                type="text"
+                id="search-plat"
+                placeholder="Cari lokasi kamera..."
+                class="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-sm"
+              />
+              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+          </div>
+          <div
+            class="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100"
+          >
+            <div class="space-y-3" id="daftar-kamera-plat"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-6 flex flex-col gap-4">
+        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl p-5 shadow-lg flex-1">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center" id="judulKamera-plat-nomor">
+              <i class="fas fa-camera text-purple-600 mr-2"></i>
+              {% if default_camera %} {{ default_camera.location }} {% else %} Tidak Ada Kamera Aktif {% endif %}
+            </h2>
+          </div>
+          <div
+            class="relative bg-gray-800 rounded-xl overflow-hidden border-2 border-purple-600/30"
+            style="height: calc(100vh - 470px)"
+          >
+            {% if default_camera %}
+            <img
+              src="{{ url_for('admin.plate_video_stream', camera_id=default_camera.id) }}"
+              alt="Streaming CCTV Deteksi Plat Nomor"
+              class="w-full h-full object-cover"
+              id="videoUtama-plat-nomor"
+            />
+            {% else %}
+            <div class="w-full h-full flex items-center justify-center">
+              <div class="text-center">
+                <img
+                  src="{{ url_for('static', filename='img/cam_dead.svg') }}"
+                  alt="Tidak Ada Kamera"
+                  class="w-20 h-20 mx-auto mb-3 opacity-50"
+                />
+                <p class="text-gray-400">Tidak ada kamera aktif</p>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-4">
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"
+                />
+              </svg>
+              <span class="text-xs text-green-600 font-semibold">+12%</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="plat_total_people"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Plat Terbaca</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+              </svg>
+              <span class="text-xs text-green-600 font-semibold">+3%</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="plat_crowd_size"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Deteksi ODOL</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                />
+              </svg>
+              <span class="text-xs text-yellow-600 font-semibold">+2</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="plat_peringatanAktif"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Peringatan Aktif</p>
+          </div>
+          <div
+            class="bg-gradient-to-br from-purple-600/10 to-purple-700/5 border border-purple-600/20 p-3 rounded-xl text-center shadow-md hover:shadow-lg transition-shadow"
+          >
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                <path
+                  d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z"
+                />
+              </svg>
+              <span class="text-xs text-green-600 font-semibold">+6%</span>
+            </div>
+            <div
+              class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent text-2xl font-bold"
+              id="plat_jumlahKendaraan"
+            >
+              0
+            </div>
+            <p class="text-xs text-gray-600 mt-1 font-medium">Kendaraan</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-3">
+        <div
+          class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden flex flex-col h-[calc(100vh-280px)]"
+        >
+          <div class="p-5 flex-shrink-0 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-800 flex items-center">
+              <i class="fas fa-bell text-purple-600 mr-2"></i>
+              Log Notifikasi
+            </h2>
+          </div>
+          <div
+            class="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100"
+          >
+            <div class="space-y-3" id="daftarNotifikasi-plat"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== KONFIGURASI AWAL ==========
+    {% if default_camera %}
+    let INDEKS_KAMERA_AKTIF = {{ default_camera.id }};
+    let LOKASI_KAMERA = "{{ default_camera.lokasi }}";
+    {% else %}
+    let INDEKS_KAMERA_AKTIF = null;
+    let LOKASI_KAMERA = "Tidak Ada Kamera";
+    {% endif %}
+    let deteksiAktif = INDEKS_KAMERA_AKTIF !== null;
+    let MODE_AKTIF = 'kerumunan';
+    let lastCrowdAlertTime = 0;
+    let lastParkingAlertTime = 0;
+    let lastOdolAlertTime = 0;
+    let notificationCount = 0;
+    let daftarKameraGlobal = []; // Variabel untuk menyimpan data kamera
+
+    const BASE_URL_CROWD = "{{ url_for('admin.crowd_video_stream', camera_id=-1) }}".replace('-1', '');
+    const BASE_URL_PARKING = "{{ url_for('admin.parking_video_stream', camera_id=-1) }}".replace('-1', '');
+    const BASE_URL_PLATE = "{{ url_for('admin.plate_video_stream', camera_id=-1) }}".replace('-1', '');
+
+    // ========== FUNGSI TAB ==========
+    document.addEventListener('DOMContentLoaded', function () {
+      const tabLinks = document.querySelectorAll('.tab-link');
+      const tabContents = document.querySelectorAll('.tab-content');
+
+      tabLinks.forEach(link => {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          const targetId = this.getAttribute('href');
+
+          MODE_AKTIF = targetId.substring(5);
+
+          tabContents.forEach(content => content.classList.add('hidden'));
+          tabLinks.forEach(l => {
+            l.classList.remove('border-purple-600', 'text-purple-600');
+            l.classList.add('border-transparent', 'text-gray-500');
+            l.removeAttribute('aria-current');
+          });
+
+          const target = document.querySelector(targetId);
+          if (target) target.classList.remove('hidden');
+
+          this.classList.add('border-purple-600', 'text-purple-600');
+          this.classList.remove('border-transparent', 'text-gray-500');
+          this.setAttribute('aria-current', 'page');
+
+          if (INDEKS_KAMERA_AKTIF !== null) {
+            selectCCTV(INDEKS_KAMERA_AKTIF, MODE_AKTIF, LOKASI_KAMERA);
+          }
+        });
+      });
+    });
+
+    function selectCCTV(cameraId, mode, location) {
+      const currentMode = mode || MODE_AKTIF;
+
+      INDEKS_KAMERA_AKTIF = cameraId;
+      deteksiAktif = true;
+      LOKASI_KAMERA = location;
+
+      let videoId, judulId, streamBaseUrl;
+
+      if (mode === 'kerumunan') {
+        videoId = 'videoUtama';
+        judulId = 'judulKamera';
+        streamBaseUrl = BASE_URL_CROWD;
+      } else if (mode === 'parkir-liar') {
+        videoId = 'videoUtama-parkir-liar';
+        judulId = 'judulKamera-parkir-liar';
+        streamBaseUrl = BASE_URL_PARKING;
+      } else if (mode === 'plat-nomor') {
+        videoId = 'videoUtama-plat-nomor';
+        judulId = 'judulKamera-plat-nomor';
+        streamBaseUrl = BASE_URL_PLATE;
+      } else {
+        console.error("Mode deteksi tidak dikenali:", currentMode);
+        return;
+      }
+
+      const judulEl = document.getElementById(judulId);
+      if (judulEl) {
+        judulEl.innerHTML = `<i class="fas fa-camera text-purple-600 mr-2"></i> ${location}`;
+      }
+
+      const video = document.getElementById(videoId);
+      if (video) {
+        const newSrc = streamBaseUrl + cameraId;
+        video.src = newSrc;
+        console.log(`[DEBUG] Mengganti src ke: ${newSrc}`);
+      }
+    }
+
+    // FUNGSI UNTUK MERENDER DAFTAR KAMERA (DIGUNAKAN OLEH LOAD DAN FILTER)
+    function renderDaftarKamera(kameraList) {
+      const containerIds = ['daftar-kamera', 'daftar-kamera-parkir', 'daftar-kamera-plat'];
+
+      const cameraElements = kameraList.map(kamera => {
+        const el = document.createElement('div');
+        el.setAttribute('data-camera-index', kamera.id);
+        el.setAttribute('data-camera-location', kamera.lokasi);
+        el.className = 'kamera-item bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border-l-4 border-purple-600 cursor-pointer hover:shadow-md transition-all duration-200';
+
+        const cameraType = kamera.type || 'N/A';
+        const cameraStatus = kamera.status ? kamera.status.charAt(0).toUpperCase() + kamera.status.slice(1) : 'Tidak Diketahui';
+
+        el.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="font-semibold text-gray-800">${kamera.lokasi}</p>
+                    <p class="text-xs text-gray-600">${cameraType} | ${cameraStatus}</p>
+                </div>
+                <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            </div>
+        `;
+        return el;
+      });
+
+      containerIds.forEach(id => {
+        const kontainer = document.getElementById(id);
+        if (kontainer) {
+          kontainer.innerHTML = '';
+          const fragment = document.createDocumentFragment();
+          cameraElements.forEach(el => {
+            fragment.appendChild(el.cloneNode(true));
+          });
+          kontainer.appendChild(fragment);
+        }
+      });
+    }
+
+    function muatDaftarKamera() {
+      fetch('/admin/api/crowd/cameras')
+        .then(r => r.json())
+        .then(data => {
+          // 1. Simpan data kamera secara global
+          daftarKameraGlobal = data.cameras;
+
+          // 2. Panggil fungsi render untuk menampilkan kamera awal
+          renderDaftarKamera(daftarKameraGlobal);
+        })
+        .catch(err => console.error('Gagal memuat daftar kamera:', err));
+    }
+
+    function tambahkanNotifikasiKeLog(notification) {
+      const activeTab = document.querySelector('.tab-content:not(.hidden)');
+      let logContainerId;
+
+      if (activeTab.id === 'tab-kerumunan') {
+        logContainerId = 'daftarNotifikasi';
+      } else if (activeTab.id === 'tab-parkir-liar') {
+        logContainerId = 'daftarNotifikasi-parkir';
+      } else if (activeTab.id === 'tab-plat-nomor') {
+        logContainerId = 'daftarNotifikasi-plat';
+      }
+
+      const logContainer = document.getElementById(logContainerId);
+      if (!logContainer) return;
+
+      const notifEl = document.createElement('div');
+      notifEl.className = 'flex items-center justify-between gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors';
+      notifEl.innerHTML = `
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-red-500 text-sm"></i>
+                </div>
+                <div class="flex-1">
+                    <p class="text-sm font-semibold text-gray-800 truncate">${notification.title}</p>
+                    <p class="text-xs text-gray-500 truncate">${notification.location} - ${notification.time}</p>
+                </div>
+            </div>
+            <button class="flex-shrink-0 w-8 h-8 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-full text-xs font-medium transition-colors flex items-center justify-center">
+                OK
+            </button>
+        `;
+      logContainer.prepend(notifEl);
+
+      const dismissButton = notifEl.querySelector('button');
+      if (dismissButton) {
+        dismissButton.addEventListener('click', function () {
+          logContainer.removeChild(notifEl);
+        });
+      }
+
+      if (logContainer.children.length > 10) {
+        logContainer.removeChild(logContainer.lastChild);
+      }
+    }
+
+    function handleFetchError(response) {
+      if (!response.ok) {
+        console.error(`HTTP error! status: ${response.status} for ${response.url}`);
+        throw new Error('Gagal mengambil data: HTTP Error ' + response.status);
+      }
+      return response;
+    }
+
+    function perbaruiStatistik() {
+      if (!deteksiAktif || INDEKS_KAMERA_AKTIF === null) {
+        if (!deteksiAktif) resetSemuaKartu();
+        return;
+      }
+
+      if (MODE_AKTIF === 'kerumunan') {
+        fetch(`/admin/api/crowd/stats/${INDEKS_KAMERA_AKTIF}`)
+          .then(handleFetchError)
+          .then(r => r.json())
+          .then(data => {
+            if (data && data.status === 'active') {
+              document.getElementById('kerumunan_total_people').textContent = data.people_count || 0;
+              document.getElementById('kerumunan_crowd_size').textContent = data.crowd_size || 0;
+              document.getElementById('kerumunan_peringatanAktif').textContent = (data.is_crowd_detected ? 1 : 0);
+
+              if (data.is_crowd_detected && data.people_count > 0) {
+                tampilkanNotifikasiKerumunan(data.people_count, data.location);
+              }
+            } else {
+              resetKartuKerumunan();
+            }
+          }).catch(err => {
+            console.error('Error fetching crowd stats:', err);
+            resetKartuKerumunan();
+          });
+      }
+      else if (MODE_AKTIF === 'parkir-liar') {
+        Promise.all([
+          fetch('/admin/api/parking_violations').then(handleFetchError).then(r => r.json()),
+          fetch('/admin/api/odol_detections').then(handleFetchError).then(r => r.json())
+        ]).then(([parking, odol]) => {
+          const totalParking = parking ? parking.length : 0;
+          const totalOdol = odol ? odol.length : 0;
+          const totalPelanggaran = totalParking + totalOdol;
+          const peringatanAktif = totalPelanggaran > 0 ? 1 : 0;
+
+          document.getElementById('parkir_parking_violations').textContent = totalParking;
+          document.getElementById('parkir_odol_detections').textContent = totalOdol;
+          document.getElementById('parkir_zonaPeringatan').textContent = peringatanAktif;
+          document.getElementById('parkir_pelanggaranTotal').textContent = totalPelanggaran;
+
+          if (parking && parking.length > 0) tampilkanNotifikasiParkir(parking[0]);
+          if (odol && odol.length > 0) tampilkanNotifikasiODOL(odol[0]);
+        }).catch(err => {
+          console.error('Error fetching violation data:', err);
+          resetKartuParkir();
+        });
+      }
+      else if (MODE_AKTIF === 'plat-nomor') {
+        console.log("Mode Plat Nomor - Fetching data...");
+        resetKartuPlatNomor();
+      }
+    }
+
+    function tampilkanNotifikasiKerumunan(crowdSize, location) {
+      const now = Date.now();
+      if (now - lastCrowdAlertTime > 10000) {
+        lastCrowdAlertTime = now;
+        tambahkanNotifikasiKeLog({
+          title: 'Kerumunan Terdeteksi!',
+          location: location,
+          time: new Date().toLocaleTimeString('id-ID')
+        });
+      }
+    }
+
+    function tampilkanNotifikasiParkir(violation) {
+      const now = Date.now();
+      const violationTime = new Date(violation.timestamp).getTime();
+      if (now - violationTime < 60000 && now - lastParkingAlertTime > 15000) {
+        lastParkingAlertTime = now;
+        tambahkanNotifikasiKeLog({
+          title: 'Parkir Liar Terdeteksi!',
+          location: violation.location,
+          time: new Date(violation.timestamp).toLocaleTimeString('id-ID')
+        });
+      }
+    }
+
+    function tampilkanNotifikasiODOL(detection) {
+      const now = Date.now();
+      const detectionTime = new Date(detection.timestamp).getTime();
+      if (now - detectionTime < 60000 && now - lastOdolAlertTime > 15000) {
+        lastOdolAlertTime = now;
+        tambahkanNotifikasiKeLog({
+          title: 'ODOL Terdeteksi!',
+          location: detection.location,
+          time: new Date(detection.timestamp).toLocaleTimeString('id-ID')
+        });
+      }
+    }
+
+    function loopUpdateUtama() {
+      perbaruiStatistik();
+
+      const activeTab = document.querySelector('.tab-content:not(.hidden)');
+      if (activeTab.id === 'tab-kerumunan') {
+        fetch(`/admin/api/crowd/stats/${INDEKS_KAMERA_AKTIF}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.is_crowd_detected && data.crowd_size > 0) {
+              tampilkanNotifikasiKerumunan(data.crowd_size, data.location);
+            }
+          });
+      } else if (activeTab.id === 'tab-parkir-liar') {
+        Promise.all([
+          fetch('/admin/api/parking_violations').then(r => r.json()),
+          fetch('/admin/api/odol_detections').then(r => r.json())
+        ]).then(([parking, odol]) => {
+          if (parking.length > 0) tampilkanNotifikasiParkir(parking[0]);
+          if (odol.length > 0) tampilkanNotifikasiODOL(odol[0]);
+        });
+      }
+    }
+
+    function resetKartuKerumunan() {
+      document.getElementById('kerumunan_total_people').textContent = 0;
+      document.getElementById('kerumunan_crowd_size').textContent = 0;
+      document.getElementById('kerumunan_peringatanAktif').textContent = 0;
+    }
+
+    function resetKartuParkir() {
+      document.getElementById('parkir_parking_violations').textContent = 0;
+      document.getElementById('parkir_odol_detections').textContent = 0;
+      document.getElementById('parkir_zonaPeringatan').textContent = 0;
+      document.getElementById('parkir_pelanggaranTotal').textContent = 0;
+    }
+
+    function resetKartuPlatNomor() {
+      document.getElementById('plat_total_people').textContent = 0;
+      document.getElementById('plat_crowd_size').textContent = 0;
+      document.getElementById('plat_peringatanAktif').textContent = 0;
+      document.getElementById('plat_jumlahKendaraan').textContent = 0;
+    }
+
+    function resetSemuaKartu() {
+      resetKartuKerumunan();
+      resetKartuParkir();
+      resetKartuPlatNomor();
+    }
+
+    // FUNGSI BARU: Untuk memfilter daftar kamera
+    function filterKamera(searchTerm) {
+      const term = searchTerm.toLowerCase();
+
+      // Filter dari daftar global
+      const filteredKamera = daftarKameraGlobal.filter(kamera => {
+        // Cari berdasarkan lokasi kamera
+        return kamera.lokasi.toLowerCase().includes(term);
+      });
+
+      // Render ulang daftar kamera yang sudah difilter
+      renderDaftarKamera(filteredKamera);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      muatDaftarKamera();
+
+      const allCameraContainers = document.querySelectorAll(
+        '#daftar-kamera, #daftar-kamera-parkir, #daftar-kamera-plat'
+      );
+
+      allCameraContainers.forEach(container => {
+        container.addEventListener('click', function (e) {
+          let targetEl = e.target.closest('div[data-camera-index]');
+
+          if (targetEl) {
+            const cameraId = parseInt(targetEl.getAttribute('data-camera-index'));
+            const cameraLocation = targetEl.getAttribute('data-camera-location');
+
+            if (!isNaN(cameraId)) {
+              selectCCTV(cameraId, MODE_AKTIF, cameraLocation);
+            }
+          }
+        });
+      });
+
+      // LOGIKA PENCARIAN
+      const searchInputs = [
+        document.getElementById('search-kerumunan'),
+        document.getElementById('search-parkir'),
+        document.getElementById('search-plat')
+      ];
+
+      searchInputs.forEach(input => {
+        if (input) {
+          // Tambahkan listener untuk event 'input' agar pencarian real-time
+          input.addEventListener('input', function() {
+            filterKamera(this.value);
+          });
+        }
+      });
+
+      if (deteksiAktif) {
+        setInterval(loopUpdateUtama, 2000);
+        loopUpdateUtama();
+      }
+    });
+  </script>
+</div>
+{% endblock %}
