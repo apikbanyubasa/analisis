@@ -716,7 +716,7 @@ def detect_crowd(tracked_objects, min_crowd_size=5, crowd_radius_threshold=100):
 # -------------------------------------------------------------------
 # FUNGSI WORKER (OTAK DETEKSI 24/7) - VERSI TANGGUH
 # -------------------------------------------------------------------
-def run_detection_worker(stream_url, location_name, detection_mode="all"):
+def run_detection_worker(stream_url, location_name, detection_mode="all", stop_event=None):
     
     thread_name = threading.current_thread().name
     print(f"[{thread_name}] WORKER DIMULAI: Memulai deteksi untuk: {location_name}")
@@ -759,6 +759,14 @@ def run_detection_worker(stream_url, location_name, detection_mode="all"):
         # Ini adalah loop abadi. 
         # Worker akan terus hidup dan mencoba menyambung ulang selamanya.
         while True:
+            # --- Kill Switch Check ---
+            if stop_event and stop_event.is_set():
+                    # PASTIKAN KEDUA BARIS INI DIBERI INDENTASI
+                    # BARIS 764
+                    print(f"[{thread_name}] WORKER INFO: Menerima sinyal berhenti. Keluar dari loop.")
+                    # BARIS 765
+                    break # Keluar dari loop utama
+        # --- End Kill Switch Check ---
             
             # --- BLOK KONEKSI BARU ---
             # Jika stream tidak terhubung (cap is None), coba sambungkan.
@@ -767,11 +775,18 @@ def run_detection_worker(stream_url, location_name, detection_mode="all"):
                 cap = get_stream_from_m3u8(stream_url)
                 
                 if cap is None:
-                    print(f"[{thread_name}] WORKER WARN: Koneksi {location_name} gagal. Mencoba lagi dalam 5 detik...")
-                    time.sleep(5)
-                    continue # Ulangi loop, coba sambung lagi
+                    continue 
                 else:
                     print(f"[{thread_name}] WORKER INFO: Koneksi {location_name} berhasil.")
+                    
+                    try:
+                        socketio.emit('stream_ready', {
+                            'location': location_name,
+                            'status': 'ready'
+                        })
+                    except Exception as e:
+                        print(f"[{thread_name}] SocketIO emit error (ready): {e}")
+ 
             # --- AKHIR BLOK KONEKSI BARU ---
 
             # Jika kita sampai di sini, cap PASTI sudah terhubung.
@@ -964,13 +979,18 @@ def run_detection_worker(stream_url, location_name, detection_mode="all"):
     except Exception as e:
         print(f"[{thread_name}] Error Kritis di WORKER {location_name}: {e}")
     finally:
-        # Ini hanya akan berjalan jika terjadi Error Kritis (Exception)
+        # Ini akan dieksekusi baik saat Error Kritis maupun saat Kill Switch
         if cap:
             cap.release()
+            
+        # --- PEMBERSIHAN MUTLAK (Anti-Persistensi) ---
         if location_name in LOCATION_TRACKERS:
             del LOCATION_TRACKERS[location_name]
         if location_name in LATEST_DETECTION_STATS:
-            del LATEST_DETECTION_STATS[location_name]
+            # Ini memastikan worker yang lama tidak meninggalkan frame atau stats di global state
+            del LATEST_DETECTION_STATS[location_name] 
+        # --- AKHIR PERBAIKAN ---
+        
         print(f"[{thread_name}] WORKER {location_name} telah berhenti KARENA ERROR KRITIS.")
 # -------------------------------------------------------------------
 # FUNGSI STREAMER (HANYA MENGAMBIL FRAME DARI WORKER)

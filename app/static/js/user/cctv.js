@@ -6,9 +6,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================
     console.log("DOM siap, memulai inisialisasi peta...");
 
+    const getJSONData = (id) => {
+    const elem = document.getElementById(id);
+    if (!elem || !elem.textContent) {
+        return null;
+    }
+    const text = elem.textContent.trim();
+    // Jika data adalah string 'null', kembalikan objek kosong atau null, bukan mencoba parse
+    if (text === 'null' || text === '') {
+        return null; 
+    }
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error(`Error parsing JSON dari #${id}:`, e, "Data:", text);
+        // Jika parsing gagal (mis. string 'undefined' atau JSON rusak), kembalikan null
+        return null; 
+    }
+}
+
     // 1. Ambil data dari HTML.
-    const cctvMarkersData = JSON.parse(document.getElementById("cctv-data").textContent);
-    const batasKecamatanData = JSON.parse(document.getElementById("batas-data").textContent);
+    const cctvMarkersData = getJSONData("cctv-data") || [];
+    const batasKecamatanData = getJSONData("batas-data") || { features: [] };
 
     // 2. Inisialisasi Peta Leaflet
     const map = L.map("map", {
@@ -127,17 +146,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let allCardsHTML = "";
 
         allMarkers.forEach((markerInfo) => {
-            const isAktif = markerInfo.data.status?.toLowerCase() === "aktif";
-            const statusVisible = (showAktif && isAktif) || (showNonaktif && !isAktif);
-            const kecamatanVisible = selectedKecamatan === "semua" || markerInfo.kecamatan === selectedKecamatan;
+        const isAktif = markerInfo.data.status?.toLowerCase() === "aktif";
+        const statusVisible = (showAktif && isAktif) || (showNonaktif && !isAktif);
+        // Hapus atau abaikan filter kecamatan untuk debugging
+        // const kecamatanVisible = selectedKecamatan === "semua" || markerInfo.kecamatan === selectedKecamatan; 
+        const kecamatanVisible = true; // <--- SET INI KE TRUE UNTUK DEBUGGING
 
-            if (statusVisible && kecamatanVisible) {
-                markerInfo.leafletMarker.addTo(map);
-                allCardsHTML += createCctvCardHTML(markerInfo);
-            } else {
-                map.removeLayer(markerInfo.leafletMarker);
-            }
-        });
+        if (statusVisible && kecamatanVisible) { // <--- HANYA GUNAKAN statusVisible
+            markerInfo.leafletMarker.addTo(map);
+            allCardsHTML += createCctvCardHTML(markerInfo);
+        } else {
+            map.removeLayer(markerInfo.leafletMarker);
+        }
+    });
 
         previewContainer.innerHTML = allCardsHTML;
         observeCctvCards();

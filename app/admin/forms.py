@@ -181,10 +181,6 @@ class KontakForm(FlaskForm):
     nomor_telp = StringField(
         "Nomor Telepon", validators=[DataRequired(), Length(max=20)]
     )
-    # Icon berupa nama class Font Awesome (e.g., 'fas fa-ambulance')
-    icon = StringField(
-        "Icon (Font Awesome Class)", validators=[DataRequired(), Length(max=50)]
-    )
     submit = SubmitField("Simpan Kontak")
 
 

@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, jsonify, Response, url_for
 from jinja2 import TemplateNotFound
 import pandas as pd
 import json
+import math
 from ..models import CCTV, BatasWilayah
 
 # Diasumsikan Anda memiliki file analyzer.py di root atau di lokasi yang bisa diimpor
@@ -107,19 +108,44 @@ def dashboard():
 # Bagian yang diperbaiki di routes.py
 
 
-@user_bp.route('/cctv')
+@user_bp.route("/cctv")
 def cctv():
     # --- 1. Ambil Data CCTV dari Database ---
     cctv_db = CCTV.query.all()
     cctv_markers = []
+
     for c in cctv_db:
-        # --- PERUBAHAN DIMULAI DI SINI ---
-        # Konversi URL video terlebih dahulu
+
+        # --- PERBAIKAN KRITIS: SANITASI KOORDINAT ---
+
+        # Fungsi helper untuk membersihkan data koordinat
+        def sanitize_coordinate(coord):
+            if coord is None:
+                return 0.0
+            try:
+                # Coba konversi ke float (penting jika disimpan sebagai string)
+                f_coord = float(coord)
+                # Cek jika nilai yang dikonversi adalah NaN (dari import CSV sebelumnya)
+                if math.isnan(f_coord):
+                    return 0.0
+                return f_coord
+            except (ValueError, TypeError):
+                return 0.0  # Jika tidak bisa diubah ke float
+
+        lat_safe = sanitize_coordinate(c.latitude)
+        lng_safe = sanitize_coordinate(c.longitude)
+
+        # JANGAN SERTAKAN MARKER JIKA KEDUA KOORDINAT ADALAH 0.0 (Data hilang/default)
+        if lat_safe == 0.0 and lng_safe == 0.0:
+            continue
+
+        # --- AKHIR PERBAIKAN SANITASI ---
+
         converted_video_url = convert_video_url(c.video_url)
-        
+
         # Siapkan konten video atau placeholder
         video_content = ""
-        is_active_with_video = c.status.lower() == 'aktif' and converted_video_url
+        is_active_with_video = c.status.lower() == "aktif" and converted_video_url
 
         if is_active_with_video:
             # Jika aktif dan punya video, buat iframe
@@ -151,57 +177,78 @@ def cctv():
                 {video_content}
             </div>
         """
-        # --- AKHIR PERUBAHAN ---
 
-        cctv_markers.append({
-            'id': c.id, 'latitude': c.latitude, 'longitude': c.longitude,
-            'popup_content': popup_html,  # Gunakan HTML yang baru
-            'lokasi': c.lokasi, 'status': c.status,
-            'type': c.type, 'video_url': converted_video_url, # Kirim URL yg sudah dikonversi
-            'img_placeholder': url_for('static', filename='img/no-feed.svg') # Tambahkan placeholder
-        })
+        cctv_markers.append(
+            {
+                "id": c.id,
+                "latitude": lat_safe,  # <--- Gunakan nilai yang sudah dibersihkan
+                "longitude": lng_safe,  # <--- Gunakan nilai yang sudah dibersihkan
+                "popup_content": popup_html,
+                "lokasi": c.lokasi,
+                "status": c.status,
+                "type": c.type,
+                "video_url": converted_video_url,
+                "img_placeholder": url_for("static", filename="img/no-feed.svg"),
+            }
+        )
 
-    # (Sisa kode di bawah ini tetap sama)
+    # (Sisa kode untuk batas wilayah tetap sama)
     batas_wilayah_db = BatasWilayah.query.all()
     list_fitur_kecamatan = []
     for bw in batas_wilayah_db:
-        if not bw.geojson or not bw.geojson.strip(): continue
+        if not bw.geojson or not bw.geojson.strip():
+            continue
         try:
             geo_data = json.loads(bw.geojson)
             original_coords = geo_data.get("coordinates")
+            # Pastikan swap_coords tersedia
             swapped_coords = swap_coords(original_coords)
-            correct_geometry = { "type": geo_data.get("type", "MultiPolygon"), "coordinates": swapped_coords }
-            feature = { "type": "Feature", "properties": {"name": bw.nama, "type": bw.jenis}, "geometry": correct_geometry }
+            correct_geometry = {
+                "type": geo_data.get("type", "MultiPolygon"),
+                "coordinates": swapped_coords,
+            }
+            feature = {
+                "type": "Feature",
+                "properties": {"name": bw.nama, "type": bw.jenis},
+                "geometry": correct_geometry,
+            }
             list_fitur_kecamatan.append(feature)
         except Exception as e:
             print(f"Error processing GeoJSON for {bw.nama}: {e}")
 
-    batas_wilayah_data = { "type": "FeatureCollection", "features": list_fitur_kecamatan }
+    batas_wilayah_data = {"type": "FeatureCollection", "features": list_fitur_kecamatan}
 
-    preview_cctvs_query = CCTV.query.filter(
-        CCTV.status.ilike("aktif"), CCTV.stream_url.isnot(None), CCTV.stream_url != ''
-    ).limit(2).all()
+    preview_cctvs_query = (
+        CCTV.query.filter(
+            CCTV.status.ilike("aktif"),
+            CCTV.stream_url.isnot(None),
+            CCTV.stream_url != "",
+        )
+        .limit(2)
+        .all()
+    )
 
     return render_template(
-        'cctv.html',
+        "cctv.html",
         cctv_markers=cctv_markers,
         batas_wilayah_data=batas_wilayah_data,
-        preview_cctvs=preview_cctvs_query
+        preview_cctvs=preview_cctvs_query,
     )
 
 
 # Di dalam app/user/routes.py
 
-@user_bp.route("/kepadatan") # <-- Ini adalah URL baru Anda
+
+@user_bp.route("/kepadatan")  # <-- Ini adalah URL baru Anda
 def kepadatan():
     """
-    Menampilkan halaman Kepadatan. Logika ini sama dengan dashboard 
+    Menampilkan halaman Kepadatan. Logika ini sama dengan dashboard
     karena menggunakan data CCTV yang sama.
     """
     try:
         # 1. Ambil semua data CCTV dari database
         all_cctv = CCTV.query.order_by(CCTV.lokasi).all()
-        
+
         # 2. Siapkan data CCTV untuk digunakan di JavaScript
         cctv_data_for_js = [
             {
@@ -217,7 +264,7 @@ def kepadatan():
             }
             for c in all_cctv
         ]
-        
+
         # 3. Cari CCTV unggulan (featured) yang aktif dan mendukung deteksi
         featured_cctv = CCTV.query.filter(
             CCTV.status.ilike("aktif"),
@@ -229,17 +276,21 @@ def kepadatan():
 
         # 4. Render template HTML yang baru
         return render_template(
-            "kepadatan.html", # <-- NAMA FILE HTML BARU
+            "kepadatan.html",  # <-- NAMA FILE HTML BARU
             featured_cctv_idx=featured_cctv_idx,
             featured_cctv_lokasi=featured_cctv_lokasi,
             cctv_data=cctv_data_for_js,
-            title="Analisis Kepadatan Lalu Lintas"
+            title="Analisis Kepadatan Lalu Lintas",
         )
     except Exception as e:
         print(f"ERROR: Gagal memuat data untuk kepadatan: {e}")
-        return render_template("kepadatan.html", 
-                                featured_cctv_idx=None, featured_cctv_lokasi="Data Tidak Ditemukan",
-                                cctv_data=[], title="Analisis Kepadatan Lalu Lintas")
+        return render_template(
+            "kepadatan.html",
+            featured_cctv_idx=None,
+            featured_cctv_lokasi="Data Tidak Ditemukan",
+            cctv_data=[],
+            title="Analisis Kepadatan Lalu Lintas",
+        )
 
 
 @user_bp.route("/api/cctv/<int:cctv_id>/info")

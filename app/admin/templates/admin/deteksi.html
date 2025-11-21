@@ -488,400 +488,448 @@ page_title %}Deteksi{% endblock %} {% block page_subtitle %}Pantau CCTV Secara R
   </div>
 
   <script>
-    // ========== KONFIGURASI AWAL ==========
-    {% if default_camera %}
-    let INDEKS_KAMERA_AKTIF = {{ default_camera.id }};
-    let LOKASI_KAMERA = "{{ default_camera.lokasi }}";
-    {% else %}
-    let INDEKS_KAMERA_AKTIF = null;
-    let LOKASI_KAMERA = "Tidak Ada Kamera";
-    {% endif %}
-    let deteksiAktif = INDEKS_KAMERA_AKTIF !== null;
-    let MODE_AKTIF = 'kerumunan';
-    let lastCrowdAlertTime = 0;
-    let lastParkingAlertTime = 0;
-    let lastOdolAlertTime = 0;
-    let notificationCount = 0;
-    let daftarKameraGlobal = []; // Variabel untuk menyimpan data kamera
+        // ========== KONFIGURASI AWAL ==========
+        {% if default_camera %}
+        let INDEKS_KAMERA_AKTIF = {{ default_camera.id }};
+        let LOKASI_KAMERA = "{{ default_camera.lokasi }}";
+        {% else %}
+        let INDEKS_KAMERA_AKTIF = null;
+        let LOKASI_KAMERA = "Tidak Ada Kamera";
+        {% endif %}
+        let deteksiAktif = INDEKS_KAMERA_AKTIF !== null;
+        let MODE_AKTIF = 'kerumunan';
+        let lastCrowdAlertTime = 0;
+        let lastParkingAlertTime = 0;
+        let lastOdolAlertTime = 0;
+        let notificationCount = 0;
+        let daftarKameraGlobal = []; // Variabel untuk menyimpan data kamera
 
-    const BASE_URL_CROWD = "{{ url_for('admin.crowd_video_stream', camera_id=-1) }}".replace('-1', '');
-    const BASE_URL_PARKING = "{{ url_for('admin.parking_video_stream', camera_id=-1) }}".replace('-1', '');
-    const BASE_URL_PLATE = "{{ url_for('admin.plate_video_stream', camera_id=-1) }}".replace('-1', '');
+        const BASE_URL_CROWD = "{{ url_for('admin.crowd_video_stream', camera_id=-1) }}".replace('-1', '');
+        const BASE_URL_PARKING = "{{ url_for('admin.parking_video_stream', camera_id=-1) }}".replace('-1', '');
+        const BASE_URL_PLATE = "{{ url_for('admin.plate_video_stream', camera_id=-1) }}".replace('-1', '');
 
-    // ========== FUNGSI TAB ==========
-    document.addEventListener('DOMContentLoaded', function () {
-      const tabLinks = document.querySelectorAll('.tab-link');
-      const tabContents = document.querySelectorAll('.tab-content');
+        // ========== FUNGSI TAB ==========
+        document.addEventListener('DOMContentLoaded', function () {
+          const tabLinks = document.querySelectorAll('.tab-link');
+          const tabContents = document.querySelectorAll('.tab-content');
 
-      tabLinks.forEach(link => {
-        link.addEventListener('click', function (e) {
-          e.preventDefault();
-          const targetId = this.getAttribute('href');
+          tabLinks.forEach(link => {
+            link.addEventListener('click', function (e) {
+              e.preventDefault();
+              const targetId = this.getAttribute('href');
 
-          MODE_AKTIF = targetId.substring(5);
+              MODE_AKTIF = targetId.substring(5);
 
-          tabContents.forEach(content => content.classList.add('hidden'));
-          tabLinks.forEach(l => {
-            l.classList.remove('border-purple-600', 'text-purple-600');
-            l.classList.add('border-transparent', 'text-gray-500');
-            l.removeAttribute('aria-current');
-          });
+              tabContents.forEach(content => content.classList.add('hidden'));
+              tabLinks.forEach(l => {
+                l.classList.remove('border-purple-600', 'text-purple-600');
+                l.classList.add('border-transparent', 'text-gray-500');
+                l.removeAttribute('aria-current');
+              });
 
-          const target = document.querySelector(targetId);
-          if (target) target.classList.remove('hidden');
+              const target = document.querySelector(targetId);
+              if (target) target.classList.remove('hidden');
 
-          this.classList.add('border-purple-600', 'text-purple-600');
-          this.classList.remove('border-transparent', 'text-gray-500');
-          this.setAttribute('aria-current', 'page');
+              this.classList.add('border-purple-600', 'text-purple-600');
+              this.classList.remove('border-transparent', 'text-gray-500');
+              this.setAttribute('aria-current', 'page');
 
-          if (INDEKS_KAMERA_AKTIF !== null) {
-            selectCCTV(INDEKS_KAMERA_AKTIF, MODE_AKTIF, LOKASI_KAMERA);
-          }
-        });
-      });
-    });
-
-    function selectCCTV(cameraId, mode, location) {
-      const currentMode = mode || MODE_AKTIF;
-
-      INDEKS_KAMERA_AKTIF = cameraId;
-      deteksiAktif = true;
-      LOKASI_KAMERA = location;
-
-      let videoId, judulId, streamBaseUrl;
-
-      if (mode === 'kerumunan') {
-        videoId = 'videoUtama';
-        judulId = 'judulKamera';
-        streamBaseUrl = BASE_URL_CROWD;
-      } else if (mode === 'parkir-liar') {
-        videoId = 'videoUtama-parkir-liar';
-        judulId = 'judulKamera-parkir-liar';
-        streamBaseUrl = BASE_URL_PARKING;
-      } else if (mode === 'plat-nomor') {
-        videoId = 'videoUtama-plat-nomor';
-        judulId = 'judulKamera-plat-nomor';
-        streamBaseUrl = BASE_URL_PLATE;
-      } else {
-        console.error("Mode deteksi tidak dikenali:", currentMode);
-        return;
-      }
-
-      const judulEl = document.getElementById(judulId);
-      if (judulEl) {
-        judulEl.innerHTML = `<i class="fas fa-camera text-purple-600 mr-2"></i> ${location}`;
-      }
-
-      const video = document.getElementById(videoId);
-      if (video) {
-        const newSrc = streamBaseUrl + cameraId;
-        video.src = newSrc;
-        console.log(`[DEBUG] Mengganti src ke: ${newSrc}`);
-      }
-    }
-
-    // FUNGSI UNTUK MERENDER DAFTAR KAMERA (DIGUNAKAN OLEH LOAD DAN FILTER)
-    function renderDaftarKamera(kameraList) {
-      const containerIds = ['daftar-kamera', 'daftar-kamera-parkir', 'daftar-kamera-plat'];
-
-      const cameraElements = kameraList.map(kamera => {
-        const el = document.createElement('div');
-        el.setAttribute('data-camera-index', kamera.id);
-        el.setAttribute('data-camera-location', kamera.lokasi);
-        el.className = 'kamera-item bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border-l-4 border-purple-600 cursor-pointer hover:shadow-md transition-all duration-200';
-
-        const cameraType = kamera.type || 'N/A';
-        const cameraStatus = kamera.status ? kamera.status.charAt(0).toUpperCase() + kamera.status.slice(1) : 'Tidak Diketahui';
-
-        el.innerHTML = `
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="font-semibold text-gray-800">${kamera.lokasi}</p>
-                    <p class="text-xs text-gray-600">${cameraType} | ${cameraStatus}</p>
-                </div>
-                <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-            </div>
-        `;
-        return el;
-      });
-
-      containerIds.forEach(id => {
-        const kontainer = document.getElementById(id);
-        if (kontainer) {
-          kontainer.innerHTML = '';
-          const fragment = document.createDocumentFragment();
-          cameraElements.forEach(el => {
-            fragment.appendChild(el.cloneNode(true));
-          });
-          kontainer.appendChild(fragment);
-        }
-      });
-    }
-
-    function muatDaftarKamera() {
-      fetch('/admin/api/crowd/cameras')
-        .then(r => r.json())
-        .then(data => {
-          // 1. Simpan data kamera secara global
-          daftarKameraGlobal = data.cameras;
-
-          // 2. Panggil fungsi render untuk menampilkan kamera awal
-          renderDaftarKamera(daftarKameraGlobal);
-        })
-        .catch(err => console.error('Gagal memuat daftar kamera:', err));
-    }
-
-    function tambahkanNotifikasiKeLog(notification) {
-      const activeTab = document.querySelector('.tab-content:not(.hidden)');
-      let logContainerId;
-
-      if (activeTab.id === 'tab-kerumunan') {
-        logContainerId = 'daftarNotifikasi';
-      } else if (activeTab.id === 'tab-parkir-liar') {
-        logContainerId = 'daftarNotifikasi-parkir';
-      } else if (activeTab.id === 'tab-plat-nomor') {
-        logContainerId = 'daftarNotifikasi-plat';
-      }
-
-      const logContainer = document.getElementById(logContainerId);
-      if (!logContainer) return;
-
-      const notifEl = document.createElement('div');
-      notifEl.className = 'flex items-center justify-between gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors';
-      notifEl.innerHTML = `
-            <div class="flex items-center gap-3 min-w-0">
-                <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-exclamation-triangle text-red-500 text-sm"></i>
-                </div>
-                <div class="flex-1">
-                    <p class="text-sm font-semibold text-gray-800 truncate">${notification.title}</p>
-                    <p class="text-xs text-gray-500 truncate">${notification.location} - ${notification.time}</p>
-                </div>
-            </div>
-            <button class="flex-shrink-0 w-8 h-8 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-full text-xs font-medium transition-colors flex items-center justify-center">
-                OK
-            </button>
-        `;
-      logContainer.prepend(notifEl);
-
-      const dismissButton = notifEl.querySelector('button');
-      if (dismissButton) {
-        dismissButton.addEventListener('click', function () {
-          logContainer.removeChild(notifEl);
-        });
-      }
-
-      if (logContainer.children.length > 10) {
-        logContainer.removeChild(logContainer.lastChild);
-      }
-    }
-
-    function handleFetchError(response) {
-      if (!response.ok) {
-        console.error(`HTTP error! status: ${response.status} for ${response.url}`);
-        throw new Error('Gagal mengambil data: HTTP Error ' + response.status);
-      }
-      return response;
-    }
-
-    function perbaruiStatistik() {
-      if (!deteksiAktif || INDEKS_KAMERA_AKTIF === null) {
-        if (!deteksiAktif) resetSemuaKartu();
-        return;
-      }
-
-      if (MODE_AKTIF === 'kerumunan') {
-        fetch(`/admin/api/crowd/stats/${INDEKS_KAMERA_AKTIF}`)
-          .then(handleFetchError)
-          .then(r => r.json())
-          .then(data => {
-            if (data && data.status === 'active') {
-              document.getElementById('kerumunan_total_people').textContent = data.people_count || 0;
-              document.getElementById('kerumunan_crowd_size').textContent = data.crowd_size || 0;
-              document.getElementById('kerumunan_peringatanAktif').textContent = (data.is_crowd_detected ? 1 : 0);
-
-              if (data.is_crowd_detected && data.people_count > 0) {
-                tampilkanNotifikasiKerumunan(data.people_count, data.location);
+              if (INDEKS_KAMERA_AKTIF !== null) {
+                selectCCTV(INDEKS_KAMERA_AKTIF, MODE_AKTIF, LOKASI_KAMERA);
               }
-            } else {
-              resetKartuKerumunan();
-            }
-          }).catch(err => {
-            console.error('Error fetching crowd stats:', err);
-            resetKartuKerumunan();
+            });
           });
-      }
-      else if (MODE_AKTIF === 'parkir-liar') {
-        Promise.all([
-          fetch('/admin/api/parking_violations').then(handleFetchError).then(r => r.json()),
-          fetch('/admin/api/odol_detections').then(handleFetchError).then(r => r.json())
-        ]).then(([parking, odol]) => {
-          const totalParking = parking ? parking.length : 0;
-          const totalOdol = odol ? odol.length : 0;
-          const totalPelanggaran = totalParking + totalOdol;
-          const peringatanAktif = totalPelanggaran > 0 ? 1 : 0;
-
-          document.getElementById('parkir_parking_violations').textContent = totalParking;
-          document.getElementById('parkir_odol_detections').textContent = totalOdol;
-          document.getElementById('parkir_zonaPeringatan').textContent = peringatanAktif;
-          document.getElementById('parkir_pelanggaranTotal').textContent = totalPelanggaran;
-
-          if (parking && parking.length > 0) tampilkanNotifikasiParkir(parking[0]);
-          if (odol && odol.length > 0) tampilkanNotifikasiODOL(odol[0]);
-        }).catch(err => {
-          console.error('Error fetching violation data:', err);
-          resetKartuParkir();
         });
-      }
-      else if (MODE_AKTIF === 'plat-nomor') {
-        console.log("Mode Plat Nomor - Fetching data...");
-        resetKartuPlatNomor();
-      }
-    }
 
-    function tampilkanNotifikasiKerumunan(crowdSize, location) {
-      const now = Date.now();
-      if (now - lastCrowdAlertTime > 10000) {
-        lastCrowdAlertTime = now;
-        tambahkanNotifikasiKeLog({
-          title: 'Kerumunan Terdeteksi!',
-          location: location,
-          time: new Date().toLocaleTimeString('id-ID')
-        });
-      }
-    }
+        function selectCCTV(cameraId, mode, location) {
+          const currentMode = mode || MODE_AKTIF;
 
-    function tampilkanNotifikasiParkir(violation) {
-      const now = Date.now();
-      const violationTime = new Date(violation.timestamp).getTime();
-      if (now - violationTime < 60000 && now - lastParkingAlertTime > 15000) {
-        lastParkingAlertTime = now;
-        tambahkanNotifikasiKeLog({
-          title: 'Parkir Liar Terdeteksi!',
-          location: violation.location,
-          time: new Date(violation.timestamp).toLocaleTimeString('id-ID')
-        });
-      }
-    }
+          INDEKS_KAMERA_AKTIF = cameraId;
+          deteksiAktif = true;
+          LOKASI_KAMERA = location;
 
-    function tampilkanNotifikasiODOL(detection) {
-      const now = Date.now();
-      const detectionTime = new Date(detection.timestamp).getTime();
-      if (now - detectionTime < 60000 && now - lastOdolAlertTime > 15000) {
-        lastOdolAlertTime = now;
-        tambahkanNotifikasiKeLog({
-          title: 'ODOL Terdeteksi!',
-          location: detection.location,
-          time: new Date(detection.timestamp).toLocaleTimeString('id-ID')
-        });
-      }
-    }
+          let videoId, judulId, streamBaseUrl;
 
-    function loopUpdateUtama() {
-      perbaruiStatistik();
-
-      const activeTab = document.querySelector('.tab-content:not(.hidden)');
-      if (activeTab.id === 'tab-kerumunan') {
-        fetch(`/admin/api/crowd/stats/${INDEKS_KAMERA_AKTIF}`)
-          .then(r => r.json())
-          .then(data => {
-            if (data.is_crowd_detected && data.crowd_size > 0) {
-              tampilkanNotifikasiKerumunan(data.crowd_size, data.location);
-            }
-          });
-      } else if (activeTab.id === 'tab-parkir-liar') {
-        Promise.all([
-          fetch('/admin/api/parking_violations').then(r => r.json()),
-          fetch('/admin/api/odol_detections').then(r => r.json())
-        ]).then(([parking, odol]) => {
-          if (parking.length > 0) tampilkanNotifikasiParkir(parking[0]);
-          if (odol.length > 0) tampilkanNotifikasiODOL(odol[0]);
-        });
-      }
-    }
-
-    function resetKartuKerumunan() {
-      document.getElementById('kerumunan_total_people').textContent = 0;
-      document.getElementById('kerumunan_crowd_size').textContent = 0;
-      document.getElementById('kerumunan_peringatanAktif').textContent = 0;
-    }
-
-    function resetKartuParkir() {
-      document.getElementById('parkir_parking_violations').textContent = 0;
-      document.getElementById('parkir_odol_detections').textContent = 0;
-      document.getElementById('parkir_zonaPeringatan').textContent = 0;
-      document.getElementById('parkir_pelanggaranTotal').textContent = 0;
-    }
-
-    function resetKartuPlatNomor() {
-      document.getElementById('plat_total_people').textContent = 0;
-      document.getElementById('plat_crowd_size').textContent = 0;
-      document.getElementById('plat_peringatanAktif').textContent = 0;
-      document.getElementById('plat_jumlahKendaraan').textContent = 0;
-    }
-
-    function resetSemuaKartu() {
-      resetKartuKerumunan();
-      resetKartuParkir();
-      resetKartuPlatNomor();
-    }
-
-    // FUNGSI BARU: Untuk memfilter daftar kamera
-    function filterKamera(searchTerm) {
-      const term = searchTerm.toLowerCase();
-
-      // Filter dari daftar global
-      const filteredKamera = daftarKameraGlobal.filter(kamera => {
-        // Cari berdasarkan lokasi kamera
-        return kamera.lokasi.toLowerCase().includes(term);
-      });
-
-      // Render ulang daftar kamera yang sudah difilter
-      renderDaftarKamera(filteredKamera);
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-      muatDaftarKamera();
-
-      const allCameraContainers = document.querySelectorAll(
-        '#daftar-kamera, #daftar-kamera-parkir, #daftar-kamera-plat'
-      );
-
-      allCameraContainers.forEach(container => {
-        container.addEventListener('click', function (e) {
-          let targetEl = e.target.closest('div[data-camera-index]');
-
-          if (targetEl) {
-            const cameraId = parseInt(targetEl.getAttribute('data-camera-index'));
-            const cameraLocation = targetEl.getAttribute('data-camera-location');
-
-            if (!isNaN(cameraId)) {
-              selectCCTV(cameraId, MODE_AKTIF, cameraLocation);
-            }
+          if (mode === 'kerumunan') {
+            videoId = 'videoUtama';
+            judulId = 'judulKamera';
+            streamBaseUrl = BASE_URL_CROWD;
+          } else if (mode === 'parkir-liar') {
+            videoId = 'videoUtama-parkir-liar';
+            judulId = 'judulKamera-parkir-liar';
+            streamBaseUrl = BASE_URL_PARKING;
+          } else if (mode === 'plat-nomor') {
+            videoId = 'videoUtama-plat-nomor';
+            judulId = 'judulKamera-plat-nomor';
+            streamBaseUrl = BASE_URL_PLATE;
+          } else {
+            console.error("Mode deteksi tidak dikenali:", currentMode);
+            return;
           }
-        });
-      });
 
-      // LOGIKA PENCARIAN
-      const searchInputs = [
-        document.getElementById('search-kerumunan'),
-        document.getElementById('search-parkir'),
-        document.getElementById('search-plat')
-      ];
+          const judulEl = document.getElementById(judulId);
+          if (judulEl) {
+            judulEl.innerHTML = `<i class="fas fa-camera text-purple-600 mr-2"></i> ${location}`;
+          }
 
-      searchInputs.forEach(input => {
-        if (input) {
-          // Tambahkan listener untuk event 'input' agar pencarian real-time
-          input.addEventListener('input', function() {
-            filterKamera(this.value);
+          const video = document.getElementById(videoId);
+          if (video) {
+            const newSrc = streamBaseUrl + cameraId;
+            video.src = newSrc;
+            console.log(`[DEBUG] Mengganti src ke: ${newSrc}`);
+          }
+        }
+
+        // FUNGSI UNTUK MERENDER DAFTAR KAMERA (DIGUNAKAN OLEH LOAD DAN FILTER)
+        function renderDaftarKamera(kameraList) {
+          const containerIds = ['daftar-kamera', 'daftar-kamera-parkir', 'daftar-kamera-plat'];
+
+          const cameraElements = kameraList.map(kamera => {
+            const el = document.createElement('div');
+            el.setAttribute('data-camera-index', kamera.id);
+            el.setAttribute('data-camera-location', kamera.lokasi);
+            el.className = 'kamera-item bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border-l-4 border-purple-600 cursor-pointer hover:shadow-md transition-all duration-200';
+
+            const cameraType = kamera.type || 'N/A';
+            const cameraStatus = kamera.status ? kamera.status.charAt(0).toUpperCase() + kamera.status.slice(1) : 'Tidak Diketahui';
+
+            el.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-semibold text-gray-800">${kamera.lokasi}</p>
+                        <p class="text-xs text-gray-600">${cameraType} | ${cameraStatus}</p>
+                    </div>
+                    <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                </div>
+            `;
+            return el;
+          });
+
+          containerIds.forEach(id => {
+            const kontainer = document.getElementById(id);
+            if (kontainer) {
+              kontainer.innerHTML = '';
+              const fragment = document.createDocumentFragment();
+              cameraElements.forEach(el => {
+                fragment.appendChild(el.cloneNode(true));
+              });
+              kontainer.appendChild(fragment);
+            }
           });
         }
-      });
 
-      if (deteksiAktif) {
-        setInterval(loopUpdateUtama, 2000);
-        loopUpdateUtama();
-      }
+        function muatDaftarKamera() {
+          fetch('/admin/api/crowd/cameras')
+            .then(r => r.json())
+            .then(data => {
+              // 1. Simpan data kamera secara global
+              daftarKameraGlobal = data.cameras;
+
+              // 2. Panggil fungsi render untuk menampilkan kamera awal
+              renderDaftarKamera(daftarKameraGlobal);
+            })
+            .catch(err => console.error('Gagal memuat daftar kamera:', err));
+        }
+
+        function tambahkanNotifikasiKeLog(notification) {
+          const activeTab = document.querySelector('.tab-content:not(.hidden)');
+          let logContainerId;
+
+          if (activeTab.id === 'tab-kerumunan') {
+            logContainerId = 'daftarNotifikasi';
+          } else if (activeTab.id === 'tab-parkir-liar') {
+            logContainerId = 'daftarNotifikasi-parkir';
+          } else if (activeTab.id === 'tab-plat-nomor') {
+            logContainerId = 'daftarNotifikasi-plat';
+          }
+
+          const logContainer = document.getElementById(logContainerId);
+          if (!logContainer) return;
+
+          const notifEl = document.createElement('div');
+          notifEl.className = 'flex items-center justify-between gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors';
+          notifEl.innerHTML = `
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-sm"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-gray-800 truncate">${notification.title}</p>
+                        <p class="text-xs text-gray-500 truncate">${notification.location} - ${notification.time}</p>
+                    </div>
+                </div>
+                <button class="flex-shrink-0 w-8 h-8 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-full text-xs font-medium transition-colors flex items-center justify-center">
+                    OK
+                </button>
+            `;
+          logContainer.prepend(notifEl);
+
+          const dismissButton = notifEl.querySelector('button');
+          if (dismissButton) {
+            dismissButton.addEventListener('click', function () {
+              logContainer.removeChild(notifEl);
+            });
+          }
+
+          if (logContainer.children.length > 10) {
+            logContainer.removeChild(logContainer.lastChild);
+          }
+        }
+
+        function handleFetchError(response) {
+          if (!response.ok) {
+            console.error(`HTTP error! status: ${response.status} for ${response.url}`);
+            throw new Error('Gagal mengambil data: HTTP Error ' + response.status);
+          }
+          return response;
+        }
+
+        function perbaruiStatistik() {
+          if (!deteksiAktif || INDEKS_KAMERA_AKTIF === null) {
+            if (!deteksiAktif) resetSemuaKartu();
+            return;
+          }
+
+          if (MODE_AKTIF === 'kerumunan') {
+            fetch(`/admin/api/crowd/stats/${INDEKS_KAMERA_AKTIF}`)
+              .then(handleFetchError)
+              .then(r => r.json())
+              .then(data => {
+                if (data && data.status === 'active') {
+                  document.getElementById('kerumunan_total_people').textContent = data.people_count || 0;
+                  document.getElementById('kerumunan_crowd_size').textContent = data.crowd_size || 0;
+                  document.getElementById('kerumunan_peringatanAktif').textContent = (data.is_crowd_detected ? 1 : 0);
+
+                  if (data.is_crowd_detected && data.people_count > 0) {
+                    tampilkanNotifikasiKerumunan(data.people_count, data.location);
+                  }
+                } else {
+                  resetKartuKerumunan();
+                }
+              }).catch(err => {
+                console.error('Error fetching crowd stats:', err);
+                resetKartuKerumunan();
+              });
+          }
+          else if (MODE_AKTIF === 'parkir-liar') {
+            Promise.all([
+              fetch('/admin/api/parking_violations').then(handleFetchError).then(r => r.json()),
+              fetch('/admin/api/odol_detections').then(handleFetchError).then(r => r.json())
+            ]).then(([parking, odol]) => {
+              const totalParking = parking ? parking.length : 0;
+              const totalOdol = odol ? odol.length : 0;
+              const totalPelanggaran = totalParking + totalOdol;
+              const peringatanAktif = totalPelanggaran > 0 ? 1 : 0;
+
+              document.getElementById('parkir_parking_violations').textContent = totalParking;
+              document.getElementById('parkir_odol_detections').textContent = totalOdol;
+              document.getElementById('parkir_zonaPeringatan').textContent = peringatanAktif;
+              document.getElementById('parkir_pelanggaranTotal').textContent = totalPelanggaran;
+
+              if (parking && parking.length > 0) tampilkanNotifikasiParkir(parking[0]);
+              if (odol && odol.length > 0) tampilkanNotifikasiODOL(odol[0]);
+            }).catch(err => {
+              console.error('Error fetching violation data:', err);
+              resetKartuParkir();
+            });
+          }
+          else if (MODE_AKTIF === 'plat-nomor') {
+            console.log("Mode Plat Nomor - Fetching data...");
+            resetKartuPlatNomor();
+          }
+        }
+
+        function tampilkanNotifikasiKerumunan(crowdSize, location) {
+          const now = Date.now();
+          if (now - lastCrowdAlertTime > 10000) {
+            lastCrowdAlertTime = now;
+            tambahkanNotifikasiKeLog({
+              title: 'Kerumunan Terdeteksi!',
+              location: location,
+              time: new Date().toLocaleTimeString('id-ID')
+            });
+          }
+        }
+
+        function tampilkanNotifikasiParkir(violation) {
+          const now = Date.now();
+          const violationTime = new Date(violation.timestamp).getTime();
+          if (now - violationTime < 60000 && now - lastParkingAlertTime > 15000) {
+            lastParkingAlertTime = now;
+            tambahkanNotifikasiKeLog({
+              title: 'Parkir Liar Terdeteksi!',
+              location: violation.location,
+              time: new Date(violation.timestamp).toLocaleTimeString('id-ID')
+            });
+          }
+        }
+
+        function tampilkanNotifikasiODOL(detection) {
+          const now = Date.now();
+          const detectionTime = new Date(detection.timestamp).getTime();
+          if (now - detectionTime < 60000 && now - lastOdolAlertTime > 15000) {
+            lastOdolAlertTime = now;
+            tambahkanNotifikasiKeLog({
+              title: 'ODOL Terdeteksi!',
+              location: detection.location,
+              time: new Date(detection.timestamp).toLocaleTimeString('id-ID')
+            });
+          }
+        }
+
+        function loopUpdateUtama() {
+          perbaruiStatistik();
+
+          const activeTab = document.querySelector('.tab-content:not(.hidden)');
+          if (activeTab.id === 'tab-kerumunan') {
+            fetch(`/admin/api/crowd/stats/${INDEKS_KAMERA_AKTIF}`)
+              .then(r => r.json())
+              .then(data => {
+                if (data.is_crowd_detected && data.crowd_size > 0) {
+                  tampilkanNotifikasiKerumunan(data.crowd_size, data.location);
+                }
+              });
+          } else if (activeTab.id === 'tab-parkir-liar') {
+            Promise.all([
+              fetch('/admin/api/parking_violations').then(r => r.json()),
+              fetch('/admin/api/odol_detections').then(r => r.json())
+            ]).then(([parking, odol]) => {
+              if (parking.length > 0) tampilkanNotifikasiParkir(parking[0]);
+              if (odol.length > 0) tampilkanNotifikasiODOL(odol[0]);
+            });
+          }
+        }
+
+        function resetKartuKerumunan() {
+          document.getElementById('kerumunan_total_people').textContent = 0;
+          document.getElementById('kerumunan_crowd_size').textContent = 0;
+          document.getElementById('kerumunan_peringatanAktif').textContent = 0;
+        }
+
+        function resetKartuParkir() {
+          document.getElementById('parkir_parking_violations').textContent = 0;
+          document.getElementById('parkir_odol_detections').textContent = 0;
+          document.getElementById('parkir_zonaPeringatan').textContent = 0;
+          document.getElementById('parkir_pelanggaranTotal').textContent = 0;
+        }
+
+        function resetKartuPlatNomor() {
+          document.getElementById('plat_total_people').textContent = 0;
+          document.getElementById('plat_crowd_size').textContent = 0;
+          document.getElementById('plat_peringatanAktif').textContent = 0;
+          document.getElementById('plat_jumlahKendaraan').textContent = 0;
+        }
+
+        function resetSemuaKartu() {
+          resetKartuKerumunan();
+          resetKartuParkir();
+          resetKartuPlatNomor();
+        }
+
+        // FUNGSI BARU: Untuk memfilter daftar kamera
+        function filterKamera(searchTerm) {
+          const term = searchTerm.toLowerCase();
+
+          // Filter dari daftar global
+          const filteredKamera = daftarKameraGlobal.filter(kamera => {
+            // Cari berdasarkan lokasi kamera
+            return kamera.lokasi.toLowerCase().includes(term);
+          });
+
+          // Render ulang daftar kamera yang sudah difilter
+          renderDaftarKamera(filteredKamera);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+          muatDaftarKamera();
+
+          const allCameraContainers = document.querySelectorAll(
+            '#daftar-kamera, #daftar-kamera-parkir, #daftar-kamera-plat'
+          );
+
+          allCameraContainers.forEach(container => {
+            container.addEventListener('click', function (e) {
+              let targetEl = e.target.closest('div[data-camera-index]');
+
+              if (targetEl) {
+                const cameraId = parseInt(targetEl.getAttribute('data-camera-index'));
+                const cameraLocation = targetEl.getAttribute('data-camera-location');
+
+                if (!isNaN(cameraId)) {
+                  selectCCTV(cameraId, MODE_AKTIF, cameraLocation);
+                }
+              }
+            });
+          });
+
+          // LOGIKA PENCARIAN
+          const searchInputs = [
+            document.getElementById('search-kerumunan'),
+            document.getElementById('search-parkir'),
+            document.getElementById('search-plat')
+          ];
+
+          searchInputs.forEach(input => {
+            if (input) {
+              // Tambahkan listener untuk event 'input' agar pencarian real-time
+              input.addEventListener('input', function() {
+                filterKamera(this.value);
+              });
+            }
+          });
+
+          if (deteksiAktif) {
+            setInterval(loopUpdateUtama, 2000);
+            loopUpdateUtama();
+          }
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+        // 1. Ambil data konfigurasi kamera utama dari HTML
+        const featuredCameraElement = document.getElementById('featured-camera-id');
+        if (!featuredCameraElement) return;
+
+        const featuredCameraId = parseInt(featuredCameraElement.value);
+        const featuredCameraLocation = featuredCameraElement.dataset.location;
+        const featuredVideoStream = document.getElementById('featured-video-feed');
+
+        if (isNaN(featuredCameraId) || !featuredVideoStream) {
+            console.warn("Featured camera data not found. Worker reload visual disabled.");
+            return;
+        }
+
+        // 2. Setup SocketIO Connection
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        socket.on('connect', function() {
+            console.log('[SOCKETIO] Admin Stream Reloader Connected.');
+        });
+
+        // 3. Listener untuk Sinyal Stream Ready (dari analyzer.py)
+        socket.on('stream_ready', function(data) {
+            // Cek apakah sinyal ini untuk kamera yang sedang ditayangkan
+            if (data.location === featuredCameraLocation && data.status === 'ready') {
+
+                console.log(`[RELOAD VISUAL] Stream siap untuk ${data.location}. Memuat ulang elemen.`);
+
+                // Logika untuk memaksa browser memuat ulang stream (M-JPEG stream)
+                // Caranya: Ganti URL src dengan parameter waktu baru
+
+                // Ambil URL dasar (tanpa parameter cache lama)
+                let currentSrcBase = featuredVideoStream.src.split('?')[0];
+
+                // Cek apakah URL ini sudah merupakan stream mjpeg yang kita buat
+                if (currentSrcBase.includes('crowd_stream') || currentSrcBase.includes('parking_stream')) {
+                    // Set src baru dengan timestamp untuk memaksa reload
+                    featuredVideoStream.src = currentSrcBase + '?' + new Date().getTime();
+                } else {
+                    console.warn("[RELOAD] URL stream tidak dikenali, tidak bisa dipaksa reload.");
+                }
+            }
+        });
+
+        // 4. Integrasi dengan Select CCTV (jika ada)
+        // (Tambahkan logika di sini jika Anda ingin memuat ulang stream utama saat tab/kamera di-klik)
     });
   </script>
 </div>

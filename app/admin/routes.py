@@ -8,7 +8,7 @@ import sqlite3
 from collections import defaultdict, deque
 import math
 from datetime import datetime, timedelta
-from analyzer import generate_frames, LATEST_DETECTION_STATS
+from analyzer import generate_frames, LATEST_DETECTION_STATS, LOCATION_TRACKERS
 from flask import (
     Blueprint,
     render_template,
@@ -47,6 +47,8 @@ from .decorators import admin_required, operator_or_admin_required
 from .utils import send_password_reset_email, send_otp_email
 from shapely.wkt import loads as wkt_loads
 from shapely.geometry import mapping
+from workers_manager import reload_workers_thread
+from flask import current_app
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -388,16 +390,26 @@ def nomor():
 @operator_or_admin_required
 def add_kontak():
     form = KontakForm()
-    if form.validate_on_submit():
-        new_kontak = Kontak(
-            instansi=form.instansi.data,
-            nomor_telp=form.nomor_telp.data,
-        )
-        db.session.add(new_kontak)
-        db.session.commit()
-        flash("Data kontak berhasil ditambahkan!", "success")
-        return redirect(url_for("admin.nomor"))
 
+    if form.validate_on_submit():
+        try:
+            new_kontak = Kontak(
+                instansi=form.instansi.data,
+                nomor_telp=form.nomor_telp.data,
+            )
+            db.session.add(new_kontak)
+            db.session.commit()
+            flash("Data kontak berhasil ditambahkan!", "success")
+            return redirect(url_for("admin.nomor"))
+
+        except Exception as e:
+            db.session.rollback()
+            # CETAK ERROR LENGKAP KE KONSEL SERVER
+            print(f"DATABASE SAVE ERROR (Kontak): {e}")
+            flash("Gagal menyimpan data. Cek error di konsol server.", "danger")
+            return redirect(url_for("admin.nomor"))
+
+    # Jika form tidak divalidasi (GET request atau validation error), render template
     return render_template(
         "admin/kontak_form.html",
         form=form,
@@ -511,6 +523,7 @@ def add_cctv():
         )
         db.session.add(new_cctv)
         db.session.commit()
+        reload_workers_thread(current_app._get_current_object())
         flash("Data CCTV baru berhasil ditambahkan!", "success")
         return redirect(url_for("admin.cctv"))
     return render_template(
@@ -545,9 +558,23 @@ def edit_cctv(cctv_id):
 @operator_or_admin_required
 def delete_cctv(cctv_id):
     cctv_to_delete = CCTV.query.get_or_404(cctv_id)
+    location_name = cctv_to_delete.lokasi  # Simpan nama lokasi
+
+    # 1. Hapus dari DB
     db.session.delete(cctv_to_delete)
     db.session.commit()
-    flash("Data CCTV telah dihapus.", "success")
+
+    # --- PENGHAPUSAN KRITIS (Hapus state lokal sebelum reload) ---
+    if location_name in LATEST_DETECTION_STATS:
+        del LATEST_DETECTION_STATS[location_name]
+    if location_name in LOCATION_TRACKERS:
+        del LOCATION_TRACKERS[location_name]
+    # --- AKHIR PENGHAPUSAN KRITIS ---
+
+    # 2. Memicu reload (Mematikan thread worker lama secara paksa)
+    reload_workers_thread(current_app._get_current_object())
+
+    flash("Data CCTV telah dihapus dan worker terkait dihentikan.", "success")
     return redirect(url_for("admin.cctv"))
 
 
@@ -556,12 +583,31 @@ def delete_cctv(cctv_id):
 @admin_required
 def delete_all_cctv():
     try:
+        all_cctv_to_delete = CCTV.query.all()
+        locations_to_cleanup = [cctv.lokasi for cctv in all_cctv_to_delete]
+
+        # 1. KIRIM SINYAL STOP & TUNGGU (dipanggil di initialize_workers_and_server)
+        reload_workers_thread(current_app._get_current_object())
+
+        # 2. Hapus Global State secara paksa (Meskipun worker lama sedang mati)
+        for location_name in locations_to_cleanup:
+            if location_name in LATEST_DETECTION_STATS:
+                del LATEST_DETECTION_STATS[location_name]
+            if location_name in LOCATION_TRACKERS:
+                del LOCATION_TRACKERS[location_name]
+
+        # 3. Hapus dari database (Langkah terakhir)
         CCTV.query.delete()
         db.session.commit()
-        flash("Semua data CCTV telah berhasil dihapus.", "success")
+
+        flash(
+            "Semua data CCTV telah berhasil dihapus dan worker dihentikan.", "success"
+        )
+
     except Exception as e:
         db.session.rollback()
         flash(f"Terjadi kesalahan saat menghapus data: {e}", "danger")
+
     return redirect(url_for("admin.cctv"))
 
 
@@ -717,6 +763,7 @@ def upload_csv():
                 cctv_entry.stream_url = row.get("stream_url")
                 cctv_entry.type = row.get("type")
             db.session.commit()
+            reload_workers_thread(current_app._get_current_object())
             flash(
                 f"{count_added} data ditambahkan, {count_updated} data diperbarui dari CSV!",
                 "success",
@@ -797,7 +844,6 @@ def batas():
             "batas_kota": BatasWilayah.query.filter_by(jenis="Kota")
             .order_by(BatasWilayah.nama)
             .all(),
-
         }
     except Exception as e:
         flash(f"Gagal memuat data peta: {e}", "danger")

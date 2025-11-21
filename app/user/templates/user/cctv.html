@@ -527,11 +527,11 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script id="cctv-data" type="application/json">
-  {{ cctv_markers | tojson }}
+<script type="application/json" id="cctv-data">
+    {{ cctv_markers | tojson | safe }}
 </script>
-<script id="batas-data" type="application/json">
-  {{ batas_wilayah_data | tojson }}
+<script type="application/json" id="batas-data">
+    {{ batas_wilayah_data | tojson | safe }}
 </script>
 <script src="{{ url_for('static', filename='js/user/cctv.js') }}"></script>
 
