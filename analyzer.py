@@ -42,7 +42,6 @@ except Exception as e:
     print(f"Error loading EasyOCR: {e}")
     READER_OCR = None
 
-
 # Konfigurasi deteksi
 DETECTION_CLASSES = {
     0: "person", 2: "car", 3: "motorcycle", 5: "bus",
@@ -71,6 +70,12 @@ LINE_2_COORDS = ((0, 244), (600, 244))
 ZONE_JAUH = 1   # Area di atas LINE_1
 ZONE_TENGAH = 2 # Area di antara LINE_1 dan LINE_2
 ZONE_DEKAT = 3  # Area di bawah LINE_2
+
+# --- KECEPATAN SEDERHANA BERDASARKAN 2 GARIS --- 
+TRACKED = {}  # id -> { "last_y": ?, "timestamp": ?, "speed": ? }
+PIXEL_DISTANCE = abs(LINE_2_COORDS[0][1] - LINE_1_COORDS[0][1])  
+DISTANCE_BETWEEN_LINES_METERS = 3.5  
+
 
 # 3. TAMBAHKAN FUNGSI HELPER INI
 def get_point_side(point_x, point_y, line_x1, line_y1, line_x2, line_y2):
@@ -116,13 +121,19 @@ class SimpleObjectTracker:
         src_pts = np.array([
             [370, 253], [463, 251], [480, 350], [373, 350]
         ], dtype=np.float32)
-        REAL_WIDTH_M = 1.8 * 0.5
-        REAL_LENGTH_M = 4.5 * 0.5
-        output_width_px = int(REAL_WIDTH_M * 30)
-        output_length_px = int(REAL_LENGTH_M * 30)
-        dst_pts = np.array([[0, 0], [output_width_px, 0], [output_width_px, output_length_px], [0, output_length_px]], dtype=np.float32)
-        self.perspective_matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
-        self.ppm_birdseye = output_width_px / REAL_WIDTH_M
+        
+        # REAL_WIDTH_M = 1.8 * 0.5
+        # REAL_LENGTH_M = 4.5 * 0.5
+        # output_width_px = int(REAL_WIDTH_M * 30)
+        # output_length_px = int(REAL_LENGTH_M * 30)
+        # dst_pts = np.array([[0, 0], [output_width_px, 0], [output_width_px, output_length_px], [0, output_length_px]], dtype=np.float32)
+        # self.perspective_matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+        # self.ppm_birdseye = output_width_px / REAL_WIDTH_M
+
+        # DEPRECATED — tidak dipakai lagi untuk speed
+        self.perspective_matrix = None
+        self.ppm_birdseye = None
+
 
     def reset_completely(self):
         print(f"[{threading.current_thread().name}] RESETTING TRACKER COMPLETELY")
@@ -207,12 +218,14 @@ class SimpleObjectTracker:
                     self.objects[min_object_id]["bbox"] = detection["bbox"]
                     self.objects[min_object_id]["confidence"] = detection["confidence"]
                     self.disappeared[min_object_id] = 0
-                    transformed_center = self.transform_point(detection["center"])
-                    self.history[min_object_id].append(transformed_center)
+                    # transformed_center = self.transform_point(detection["center"])
+                    # self.history[min_object_id].append(transformed_center)
 
                     obj_id = min_object_id
                     center_x, center_y = self.objects[obj_id]["center"]
                     class_name = self.objects[obj_id]["class_name"]
+
+                    self.history[obj_id].append((center_x, center_y, time.time()))
 
                     # Tentukan zona SEKARANG
                     (l1_x1, l1_y1), (l1_x2, l1_y2) = LINE_1_COORDS
@@ -255,6 +268,48 @@ class SimpleObjectTracker:
 
                         elif previous_zone == 0:
                             self.object_zone[obj_id] = current_zone
+
+                    # --- KECEPATAN: Simpan posisi y & waktu ---
+                    # --- KECEPATAN: Simpan posisi y & waktu ---
+                    obj_id = min_object_id
+                    center_y = self.objects[obj_id]["center"][1]
+
+                    if class_name in ["car", "motorcycle", "bus", "truck"]:
+
+                        # Jika BELUM ada di TRACKED → buat entry awal
+                        if obj_id not in TRACKED:
+                            TRACKED[obj_id] = {
+                                "cx": center_x,
+                                "cy": center_y,
+                                "last_y": center_y,
+                                "timestamp": time.time(),
+                                "speed": 0.0
+                            }
+
+                        else:
+                            # Jika SUDAH ada → hitung kecepatan
+                            dy = abs(center_y - TRACKED[obj_id]["last_y"])
+
+                            if dy > 5:  # harus bergerak cukup jauh
+                                dt = time.time() - TRACKED[obj_id]["timestamp"]
+
+                                if dt > 0:
+                                    dist_meters = (dy / PIXEL_DISTANCE) * DISTANCE_BETWEEN_LINES_METERS
+                                    speed_kmh = (dist_meters / dt) * 3.6
+                                    TRACKED[obj_id]["speed"] = speed_kmh
+
+                                # update posisi terakhir
+                                TRACKED[obj_id]["cx"] = center_x
+                                TRACKED[obj_id]["cy"] = center_y
+                                TRACKED[obj_id]["last_y"] = center_y
+                                TRACKED[obj_id]["timestamp"] = time.time()
+
+                            
+
+
+
+                                
+
                     
                     # --- 🚀 AKHIR PERUBAHAN 3.1 ---
 
@@ -296,23 +351,40 @@ class SimpleObjectTracker:
         return (transformed_point[0][0][0], transformed_point[0][0][1])
 
     def calculate_speed(self, object_id):
-        if len(self.history[object_id]) < 2:
-            self.speed_history[object_id].append(0)
+        # Minimal 2 titik agar bisa hitung kecepatan
+        if object_id not in self.history or len(self.history[object_id]) < 2:
             return 0.0
-        p1_transformed = self.history[object_id][-2]
-        p2_transformed = self.history[object_id][-1]
-        dist_pixels = self.calculate_distance(p1_transformed, p2_transformed)
-        dist_meters = dist_pixels / self.ppm_birdseye
-        time_seconds = 1.0 / self.fps
-        instant_speed_kph = (dist_meters / time_seconds) * 3.6
-        MAX_SPEED_KPH = 100.0
-        if instant_speed_kph > MAX_SPEED_KPH:
-            if len(self.speed_history[object_id]) > 0:
-                return np.mean(self.speed_history[object_id])
-            else:
-                return 0.0
-        self.speed_history[object_id].append(instant_speed_kph)
-        return np.mean(self.speed_history[object_id])
+
+        # Ambil dua titik terakhir
+        (x1, y1, t1), (x2, y2, t2) = self.history[object_id][-2:]
+
+        if t2 == t1:
+            return 0.0
+
+        # Pergerakan vertikal antar frame (arah kamera)
+        pixel_distance = abs(y2 - y1)
+
+        # Noise filter — kalau bergerak < 2 px, dianggap diam
+        if pixel_distance < 2:
+            return 0.0
+
+        # Konversi pixel ke meter pakai 2 garis yang kamu ukur
+        meters_per_pixel = 3.5 / 46   # 3.5 meter / 46 pixel
+
+        distance_m = pixel_distance * meters_per_pixel
+        time_s = t2 - t1
+
+        speed_mps = distance_m / time_s
+        speed_kph = speed_mps * 3.6
+
+        # Filter lembut (agar nilai aneh hilang)
+        if speed_kph < 1:      # mobil/motor ga mungkin <1 km/h kecuali berhenti
+            return 0.0
+
+        if speed_kph > 150:    # filter loncatan karena YOLO
+            return 0.0
+
+        return speed_kph
 
 def reset_location_data(location_name):
     print(f"[{threading.current_thread().name}] STARTING COMPLETE RESET FOR LOCATION: {location_name}")
@@ -587,6 +659,10 @@ def draw_bounding_boxes(frame, tracked_objects, tracker, location_name="unknown"
         color = COLORS.get(class_name, (255, 255, 255)) 
         label_text = f"{object_id}"
         
+        speed = TRACKED.get(object_id, {}).get("speed", 0)
+        label_text = f"{object_id} [{speed:.1f} km/h]"
+
+
         if class_name == "person" and object_id in crowd_member_ids:
             color = COLORS["crowd"]
         
@@ -598,11 +674,11 @@ def draw_bounding_boxes(frame, tracked_objects, tracker, location_name="unknown"
                 color = COLORS["odol"]
                 label_text = "ODOL"
             
-            if class_name in ["car", "motorcycle", "bus"] and "KAPTEN MUSLIHAT" in location_name.upper():
-                 speed_kph = tracker.calculate_speed(object_id)
-                 label_text = f"{object_id} [{speed_kph:.1f} kmh]"
-                 if tracker.is_parked.get(object_id, False):
-                     label_text = "PARKIR LIAR"
+            # if class_name in ["car", "motorcycle", "bus"] and "KAPTEN MUSLIHAT" in location_name.upper():
+            #      speed_kph = tracker.calculate_speed(object_id)
+            #      label_text = f"{object_id} [{speed_kph:.1f} kmh]"
+            #      if tracker.is_parked.get(object_id, False):
+            #          label_text = "PARKIR LIAR"
 
         font_scale = 0.28
         padding = 2
@@ -791,11 +867,16 @@ def run_detection_worker(stream_url, location_name, detection_mode="all"):
             if frame.shape[1] > 600:
                 h_orig, w_orig = frame.shape[:2]
                 frame = cv2.resize(frame, (600, int(h_orig * 600 / w_orig)))
+                if not hasattr(cv2, "has_saved_frame"):
+                    cv2.imwrite("last_resized_frame.jpg", frame)
+                    cv2.has_saved_frame = True
+
+
 
             detections = []
             tracked_objects = {}
 
-            if frame_count % 8 == 0:
+            if frame_count % 3 == 0:
                 detections = detect_objects(frame, confidence_threshold=0.5, classes_to_detect=[0, 2, 3, 5])
             
             tracked_objects = tracker.update(detections)
@@ -929,8 +1010,50 @@ def run_detection_worker(stream_url, location_name, detection_mode="all"):
             LATEST_DETECTION_STATS[location_name] = current_stats
 
             if frame_count % 10 == 0:
+                # Tambah kecepatan rata2 semua object
+                avg_speeds = []
+
+                for obj_id in TRACKED:
+                    avg_speeds.append(TRACKED[obj_id].get("speed", 0))
+
+                if len(avg_speeds) > 0:
+                    average_speed = sum(avg_speeds) / len(avg_speeds)
+                else:
+                    average_speed = 0
+
                 try:
+                    # Hitung kecepatan rata-rata kendaraan yang sedang terlihat
+                    speed_values = []
+                    for obj_id, obj in tracked_objects.items():
+                        if obj["class_name"] in ["car", "motorcycle", "bus", "truck"]:
+
+                            # Ambil speed dari TRACKED, bukan dari calculate_speed
+                            if obj_id in TRACKED and "speed" in TRACKED[obj_id]:
+                                speed_values.append(TRACKED[obj_id]["speed"])
+                            else:
+                                speed_values.append(0)
+
+
+                    avg_speed = sum(speed_values) / len(speed_values) if speed_values else 0
+
                     # stats_packet = {k: v for k, v in current_stats.items() if k != 'latest_frame' and k != 'current_tracked_objects'}
+                    speed_jauh = []
+                    speed_dekat = []
+
+                    for obj_id, obj in TRACKED.items():
+                        # dicek apakah object berada di jalur jauh atau dekat
+                        try:
+                            last_y = obj["last_y"]
+                            if last_y < LINE_1_COORDS[0][1]:
+                                speed_jauh.append(obj["speed"])
+                            elif last_y > LINE_2_COORDS[0][1]:
+                                speed_dekat.append(obj["speed"])
+                        except:
+                            pass
+
+                    avg_speed_jauh = sum(speed_jauh)/len(speed_jauh) if speed_jauh else 0
+                    avg_speed_dekat = sum(speed_dekat)/len(speed_dekat) if speed_dekat else 0
+
                     stats_packet = {
                     'location': location_name,
                     'is_crowd_detected': is_crowd,
@@ -938,19 +1061,26 @@ def run_detection_worker(stream_url, location_name, detection_mode="all"):
                     'counts_jauh_mobil': counts_jauh.get('car', 0),
                     'counts_jauh_motor': counts_jauh.get('motorcycle', 0),
                     'counts_jauh_bus': counts_jauh.get('bus', 0),
+                    'counts_jauh_truck': counts_jauh.get('truck', 0),
                     'counts_jauh_orang': counts_jauh.get('person', 0),
                     
                     'counts_dekat_mobil': counts_dekat.get('car', 0),
                     'counts_dekat_motor': counts_dekat.get('motorcycle', 0),
                     'counts_dekat_bus': counts_dekat.get('bus', 0),
+                    'counts_dekat_truck': counts_dekat.get('truck', 0),
                     'counts_dekat_orang': counts_dekat.get('person', 0),
+
+                    'avg_speed': avg_speed,   
+                    'speed_jauh': avg_speed_jauh,
+                    'speed_dekat': avg_speed_dekat,
+
                     
                     'stat_parkir': session_parking_count,
                     'stat_odol': session_odol_count,
 
                     }
                     
-                    socketio.emit('update_stats', stats_packet)
+                    socketio.emit('update_stats_realtime', stats_packet)
                 except Exception as e:
                     print(f"[{thread_name}] SocketIO emit error (stats): {e}")
 

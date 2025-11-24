@@ -1,52 +1,16 @@
-/* Card Styles */
-  .card {
-    background: #2d3561;
-    border-radius: 8px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    margin-bottom: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
+{% extends "base.html" %}
 
-  .card-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: white;
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  /* Stat Cards */
-  .stat-card {
-    background: linear-gradient(135deg, #2d3561 0%, #3d4771 100%);
-    color: white;
-    border-radius: 8px;
-    padding: 1.5rem;
-    text-align: center;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-    border-color: #e74c3c;
-  }{% extends "base.html" %}
 {% block title %}Dashboard Analisis Lalu Lintas{% endblock %}
 
 {% block head %}
 {{ super() }}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet">
 
 <style>
-  /* CRITICAL: Override base.html restrictions */
   #app, #root, [x-data], main, .container, .content {
     height: auto !important;
     min-height: auto !important;
@@ -54,125 +18,32 @@
     overflow: visible !important;
   }
 
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html, body {
     background: #0f1419;
     color: #e5e7eb;
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", -apple-system, sans-serif;
     overflow-x: hidden;
     overflow-y: auto !important;
     height: auto !important;
     min-height: 100vh;
   }
 
-  /* Override any parent container restrictions */
-  body > div,
-  body > main,
-  .content-wrapper {
+  body > div, body > main, .content-wrapper {
     height: auto !important;
     min-height: auto !important;
     overflow: visible !important;
   }
 
-  /* Header - Bogor Navy Color */
-  .main-header {
-    background: linear-gradient(135deg, #1a1f3a 0%, #2d3561 100%);
-    padding: 1rem 2rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-  }
-
-  .header-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .header-logo-section {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .header-logo-section img {
-    height: 50px;
-    width: 50px;
-  }
-
-  .header-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: white;
-    margin-bottom: 0.25rem;
-    letter-spacing: 0.3px;
-  }
-
-  .header-subtitle {
-    color: #ffd700;
-    font-size: 0.7rem;
-    font-weight: 500;
-  }
-
-  .menu-button {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 0.5rem;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-  }
-
-  .menu-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
-  }
-
-  /* Main Container - Single Column */
+  /* Main container - untuk konten utama */
   .main-container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 0;
     background: #1a1f3a;
-    height: auto !important;
-    min-height: auto !important;
-    overflow: visible !important;
   }
 
-  /* Page Title Bar - Big Title on Top of Map */
-  .page-title-bar {
-    background: linear-gradient(135deg, #2d3561 0%, #1a1f3a 100%);
-    padding: 2rem 2rem 1rem;
-    text-align: center;
-    border-bottom: 3px solid #e74c3c;
-  }
-
-  .page-title {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: white;
-    margin-bottom: 0.5rem;
-    letter-spacing: 0.5px;
-  }
-
-  .page-subtitle {
-    color: #ffd700;
-    font-size: 0.85rem;
-  }
-
-  /* Section Styles */
   .section {
     padding: 1.5rem 2rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -188,164 +59,46 @@
     border-bottom: 2px solid #e74c3c;
   }
 
-  .section-title-highlight {
-    color: #ffd700;
-    font-weight: 700;
-  }
+  .section-title-highlight { color: #ffd700; font-weight: 700; }
+  .page-subtitle { color: #cbd5e1; font-size: 0.85rem; }
 
-  /* Map Section - Full Width */
   .map-section {
-    padding: 0;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 10px;
+    margin: 1.5rem 2rem 0;
+    background: #1a1f3a;
     height: 450px;
     position: relative;
-    margin-bottom: 0;
+    overflow: hidden;
   }
 
-  #map {
-    height: 100%;
-    width: 100%;
-  }
+  #map { height: 100%; width: 100%; border-radius: 8px; }
 
-  .map-legend {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-    background: white;
-    padding: 0.75rem 1rem;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    z-index: 500;
-    font-size: 0.7rem;
-  }
-
-  .map-legend-title {
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-    color: #141b35;
-    font-size: 0.75rem;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.4rem;
-  }
-
-  .legend-item:last-child {
-    margin-bottom: 0;
-  }
-
-  .legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  /* Video Player Section */
   .video-player-container {
     background: #000;
     aspect-ratio: 16 / 9;
     position: relative;
-    margin-bottom: 0;
     max-height: 500px;
+    height: 100%;
   }
 
   .video-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6b7280;
-    font-size: 0.9rem;
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: #6b7280; font-size: 0.9rem;
   }
 
-  #detection-stream {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
+  #detection-stream { width: 100%; height: 100%; object-fit: contain; }
 
-  .stream-overlay {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
-    background: rgba(16, 223, 180, 0.95);
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    z-index: 10;
-  }
-
-  .pulse-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: white;
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  /* Stats Grid - Mirip Binamarga */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
-  }
-
-  .stat-box {
-    text-align: center;
-    padding: 1.5rem 1rem;
+  .card {
     background: #2d3561;
     border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: all 0.3s ease;
   }
 
-  .stat-box:hover {
-    background: #3d4771;
-    border-color: #e74c3c;
-    transform: translateY(-2px);
-  }
-
-  .stat-icon {
-    width: 40px;
-    height: 40px;
-    margin: 0 auto 0.75rem;
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .stat-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #ffd700;
-    margin-bottom: 0.25rem;
-  }
-
-  .stat-label {
-    font-size: 0.75rem;
-    color: #cbd5e1;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  /* Chart Container */
   .chart-wrapper {
     background: #2d3561;
     padding: 1.5rem;
@@ -354,19 +107,72 @@
     margin-top: 1rem;
   }
 
-  .chart-title {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: white;
-    margin-bottom: 1rem;
-  }
-
   .chart-container {
     position: relative;
     height: 300px;
   }
 
-  /* Donut Stats - Like Binamarga */
+  .realtime-chart-container {
+    position: relative;
+    height: 100%;
+    min-height: 200px;
+    max-height: 350px;
+  }
+
+  .realtime-chart-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .realtime-chart-card .chart-wrapper-inner {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    background: #2d3561;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .data-table thead { background: linear-gradient(135deg, #3d4771 0%, #2d3561 100%); }
+
+  .data-table th {
+    padding: 1rem;
+    text-align: center;
+    font-weight: 600;
+    color: #ffd700;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+  }
+
+  .data-table td {
+    padding: 0.875rem;
+    text-align: center;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.9rem;
+  }
+
+  .data-table tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+
+  .data-table .row-header {
+    font-weight: 600;
+    background: rgba(231, 76, 60, 0.1);
+    color: #ffd700;
+    text-align: left;
+    padding-left: 1.5rem;
+  }
+
+  .data-table .total-row { background: rgba(231, 76, 60, 0.15); font-weight: 700; }
+  .data-table .total-cell { color: #1abc9c; font-weight: 700; font-size: 1.1rem; }
+  .data-table .grand-total { background: rgba(26, 188, 156, 0.2); color: #1abc9c; font-weight: 700; font-size: 1.2rem; }
+
   .donut-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -374,574 +180,386 @@
     margin-top: 1.5rem;
   }
 
-  .donut-stat {
-    text-align: center;
-  }
+  .donut-stat { text-align: center; }
 
   .donut-circle {
-    width: 140px;
-    height: 140px;
+    width: 140px; height: 140px;
     margin: 0 auto 1rem;
     border-radius: 50%;
     border: 12px solid;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; font-weight: 700;
     color: white;
     background: #2d3561;
   }
 
-  .donut-label {
-    font-size: 0.85rem;
-    color: #cbd5e1;
-    font-weight: 500;
-  }
+  .donut-label { font-size: 0.85rem; color: #cbd5e1; font-weight: 500; }
 
-  /* Speed Gauge - Like Binamarga */
-  .gauge-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 2rem;
-    margin-top: 1.5rem;
-  }
-
-  .gauge-item {
-    text-align: center;
-  }
-
-  .gauge-circle {
-    width: 120px;
-    height: 120px;
-    margin: 0 auto 0.75rem;
-    border-radius: 50%;
-    border: 10px solid rgba(255, 255, 255, 0.2);
-    border-top-color: #1abc9c;
-    border-right-color: #1abc9c;
+  /* HEADER - Full Width */
+  .main-header {
+    width: 100%;
+    background: linear-gradient(135deg, #1a1f3a 0%, #2d3561 100%);
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    transform: rotate(-45deg);
-    background: #2d3561;
+    padding: 1rem 2rem;
   }
 
-  .gauge-value {
-    transform: rotate(45deg);
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #ffd700;
-  }
-
-  .gauge-label {
-    font-size: 0.8rem;
-    color: #cbd5e1;
-  }
-
-  .gauge-sublabel {
-    font-size: 0.7rem;
-    color: #94a3b8;
-    margin-top: 0.25rem;
-  }
-
-  /* Footer */
+  /* FOOTER - Full Width (sama seperti header) */
   .main-footer {
-    background: linear-gradient(135deg, #0a0d1a 0%, #1a1f3a 100%);
+    width: 100%;
+    background: linear-gradient(135deg, #1a1f3a 0%, #2d3561 100%);
     color: white;
     padding: 2rem;
     text-align: center;
-    margin-top: 3rem;
     border-top: 3px solid #e74c3c;
   }
 
-  .footer-title {
-    font-size: 1rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    color: white;
+  .footer-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .footer-subtitle { font-size: 0.8rem; color: #cbd5e1; margin-bottom: 1rem; }
+  .footer-links { 
+    display: flex; 
+    justify-content: center; 
+    flex-wrap: wrap;
+    gap: 1.5rem; 
+    font-size: 0.75rem; 
+    margin-bottom: 1rem; 
+    color: #94a3b8; 
   }
-
-  .footer-subtitle {
-    font-size: 0.8rem;
-    color: #cbd5e1;
-    margin-bottom: 1rem;
-  }
-
-  .footer-links {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    font-size: 0.75rem;
-    margin-bottom: 1rem;
-    color: #94a3b8;
-  }
-
-  .footer-copyright {
-    font-size: 0.75rem;
-    color: #ffd700;
-    font-weight: 500;
-  }
-
-  /* Loading */
-  .loading-indicator {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 150;
-  }
-
-  .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: #10dfb4;
-    animation: spin 1s ease-in-out infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .section {
-      padding: 1.5rem;
-    }
-
-    .stats-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .header-title {
-      font-size: 1rem;
-    }
-
-    .header-subtitle {
-      font-size: 0.7rem;
-    }
-  }
+  .footer-copyright { font-size: 0.75rem; color: #ffd700; font-weight: 500; }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Header -->
+<!-- HEADER - Full Width (di luar main-container) -->
 <header class="main-header">
-  <div class="header-content">
-    <div class="header-logo-section">
-      <img src="{{ url_for('static', filename='img/logo_bogor.svg') }}" alt="Logo" />
-      <div>
-        <div class="header-title">PEMERINTAH DAERAH KOTA BOGOR</div>
-        <div class="header-subtitle">Sistem Informasi Lalu Lintas Real-time</div>
-      </div>
+  <div class="flex items-center space-x-2">
+    <img src="{{ url_for('static', filename='img/logo_bogor.svg') }}" alt="Logo" class="h-16 w-16 object-contain" />
+    <div class="flex flex-col">
+      <span class="text-white font-semibold text-2xl relative -top-2">PEMERINTAH DAERAH KOTA BOGOR</span>
+      <span class="text-yellow-400 text-sm">Lalu Lintas Terklasifikasi Berbasis AI</span>
     </div>
-    <button class="menu-button" @click="sidebarOpen = !sidebarOpen">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="3" y1="12" x2="21" y2="12"/>
-        <line x1="3" y1="6" x2="21" y2="6"/>
-        <line x1="3" y1="18" x2="21" y2="18"/>
-      </svg>
+  </div>
+  <div class="flex items-center space-x-3 relative -top-4">
+    <button @click="sidebarOpen = !sidebarOpen" class="focus:outline-none p-[6px] bg-[#141B35] text-white rounded shadow">
+      <img src="{{ url_for('static', filename='img/burger.svg') }}" alt="Menu Icon" class="h-5 w-5" />
     </button>
   </div>
 </header>
 
-<!-- Main Container -->
+<!-- MAIN CONTENT - Centered dengan max-width -->
 <div class="main-container">
   
-  <!-- Page Title -->
-  <div class="page-title-bar">
-    <div class="page-title">LALU LINTAS KEPADATAN SIMPANG BARANANGSIANG</div>
-    <div class="page-subtitle">Sistem Analisis Real-time</div>
+  <div class="section">
+    <div class="section-title">Titik Lokasi CCTV: <span class="section-title-highlight">{{ featured_cctv_lokasi or "Pilih CCTV" }}</span></div>
   </div>
 
-  <!-- Section 1: Map -->
   <div class="map-section">
     <div id="map"></div>
-    <div class="map-legend">
-      <div class="map-legend-title">Legenda</div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background: #ef4444;"></span>
-        <span>Sangat padat</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background: #f97316;"></span>
-        <span>Padat</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background: #facc15;"></span>
-        <span>Normal</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background: #84cc16;"></span>
-        <span>Lancar</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background: #10b981;"></span>
-        <span>Sangat lancar</span>
-      </div>
-    </div>
   </div>
 
-  <!-- Section 2: Video & Detection -->
   <div class="section">
-    <div class="section-title">
-      Perkembangan Kepadatan: <span class="section-title-highlight" id="current-location">
-        {{ featured_cctv_lokasi or "Pilih CCTV" }}
-      </span>
-    </div>
-    
-    <div class="video-player-container">
-      {% if featured_cctv_idx is not none %}
-      <div class="stream-overlay">
-        <span class="pulse-dot"></span>
-        <span>DETEKSI AKTIF</span>
-      </div>
-      <img id="detection-stream" 
-        src="{{ url_for('user.analyze_stream', cctv_id=featured_cctv_idx) }}" 
-        alt="CCTV Stream">
-      {% else %}
-      <div class="video-placeholder">
-        <p>⚠️ This live stream recording is not available.</p>
-      </div>
-      {% endif %}
-
-      <div id="loading-detection" class="loading-indicator" style="display: none;">
-        <div class="loading-spinner"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Section 3: Volume Kepadatan Chart -->
-  <div class="section">
-    <div class="section-title">Volume Kepadatan (3 bulan)</div>
-    <div class="chart-wrapper">
-      <div class="chart-container">
-        <canvas id="volumeChart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- Section 4: Detection Stats -->
-  <div class="section">
-    <div class="section-title">Volume Kepadatan (Hari ini)</div>
-    <div class="stats-grid">
-      <div class="stat-box">
-        <div class="stat-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
+    <div class="section-title">Perkembangan Kepadatan: <span class="section-title-highlight" id="current-location">{{ featured_cctv_lokasi or "Pilih CCTV" }}</span></div>
+    <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.5rem; align-items: stretch; margin-top: 1rem; height: 400px;">
+      <div class="card" style="padding: 0; background:#000; border-radius:8px; overflow:hidden; height: 100%;">
+        <div class="video-player-container" style="height: 100%;">
+          {% if featured_cctv_idx is not none %}
+          <img id="detection-stream" src="{{ url_for('user.analyze_stream', cctv_id=featured_cctv_idx) }}" alt="CCTV Stream" style="width:100%; height:100%; object-fit:cover;">
+          {% else %}
+          <div class="video-placeholder"><p>⚠️ This live stream recording is not available.</p></div>
+          {% endif %}
         </div>
-        <div class="stat-value" id="personCount">0</div>
-        <div class="stat-label">Sepeda Motor</div>
       </div>
-      <div class="stat-box">
-        <div class="stat-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-            <rect x="1" y="3" width="15" height="13"/>
-            <path d="M16 8h5l3 5v5h-2"/>
-          </svg>
-        </div>
-        <div class="stat-value" id="carCount">0</div>
-        <div class="stat-label">Mobil Penumpang</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-          </svg>
-        </div>
-        <div class="stat-value" id="motorcycleCount">0</div>
-        <div class="stat-label">Kendaraan Sedang</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-            <rect x="1" y="4" width="22" height="16" rx="2"/>
-            <path d="M7 20v-4M17 20v-4"/>
-          </svg>
-        </div>
-        <div class="stat-value" id="busCount">0</div>
-        <div class="stat-label">Bus Besar</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-            <rect x="2" y="7" width="20" height="14" rx="2"/>
-          </svg>
-        </div>
-        <div class="stat-value" id="truckCount">0</div>
-        <div class="stat-label">Truk Barang</div>
-      </div>
-    </div>
-
-    <!-- Duplicate stats untuk "Kemarin" -->
-    <div style="margin-top: 2rem;">
-      <div style="font-weight: 600; color: #6b7280; margin-bottom: 1rem;">Kemarin</div>
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-value">11</div>
-          <div class="stat-label">Sepeda Motor</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-value">10</div>
-          <div class="stat-label">Mobil Penumpang</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-value">0</div>
-          <div class="stat-label">Kendaraan Sedang</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-value">2</div>
-          <div class="stat-label">Bus Besar</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-value">0</div>
-          <div class="stat-label">Truk Barang</div>
+      <div class="card" style="padding: 1rem; display: flex; flex-direction: column; height: 100%;">
+        <div style="color:white; font-weight:700; margin-bottom: 0.75rem;">Volume Kepadatan (Real-time)</div>
+        <div style="flex: 1; min-height: 0; position: relative;">
+          <canvas id="volumeChart"></canvas>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Section 5: Volume Time Series -->
   <div class="section">
-    <div class="section-title">Volume Kepadatan (3 bulan)</div>
-    <div class="chart-wrapper">
-      <div class="chart-container">
-        <canvas id="timeSeriesChart"></canvas>
-      </div>
-    </div>
+    <div class="section-title">Volume Kendaraan (kend./menit)</div>
+    <div class="page-subtitle" style="margin-bottom: 1rem;"> <span id="table-update-time">-</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding-left: 1.5rem;">Jalur</th>
+          <th>Motor</th><th>Mobil</th><th>Bus</th><th>Truk</th>
+          <th style="background: rgba(26, 188, 156, 0.2);">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="row-header">Atas</td>
+          <td id="vol-normal-motor">0</td><td id="vol-normal-car">0</td><td id="vol-normal-bus">0</td><td id="vol-normal-truck">0</td>
+          <td class="total-cell" id="vol-normal-total">0</td>
+        </tr>
+        <tr>
+          <td class="row-header">Bawah</td>
+          <td id="vol-opposite-motor">0</td><td id="vol-opposite-car">0</td><td id="vol-opposite-bus">0</td><td id="vol-opposite-truck">0</td>
+          <td class="total-cell" id="vol-opposite-total">0</td>
+        </tr>
+        <tr class="total-row">
+          <td class="row-header">Grand Total</td>
+          <td class="total-cell" id="vol-grand-motor">0</td><td class="total-cell" id="vol-grand-car">0</td><td class="total-cell" id="vol-grand-bus">0</td><td class="total-cell" id="vol-grand-truck">0</td>
+          <td class="grand-total" id="vol-grand-total">0</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
-  <!-- Section 6: Total Volume Donut Charts -->
   <div class="section">
-    <div class="section-title">Total Volume Kepadatan (3 bulan)</div>
+    <div class="section-title">Volume Kendaraan Harian (kend./jam)</div>
+    <div class="chart-wrapper"><div class="chart-container" style="height: 400px;"><canvas id="distributionChart"></canvas></div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Total Volume Kendaraan Harian (kend./hari)</div>
     <div class="donut-stats-grid">
-      <div class="donut-stat">
-        <div class="donut-circle" style="border-color: #a855f7;">8343</div>
-        <div class="donut-label">Sepeda Motor</div>
-      </div>
-      <div class="donut-stat">
-        <div class="donut-circle" style="border-color: #ec4899;">3506</div>
-        <div class="donut-label">Mobil Penumpang</div>
-      </div>
-      <div class="donut-stat">
-        <div class="donut-circle" style="border-color: #f97316;">14</div>
-        <div class="donut-label">Kendaraan Sedang</div>
-      </div>
-      <div class="donut-stat">
-        <div class="donut-circle" style="border-color: #0891b2;">14</div>
-        <div class="donut-label">Bus Besar</div>
-      </div>
-      <div class="donut-stat">
-        <div class="donut-circle" style="border-color: #84cc16;">211</div>
-        <div class="donut-label">Truk Barang</div>
-      </div>
+      <div class="donut-stat"><div class="donut-circle" style="border-color: #a855f7;" id="donut-motor">0</div><div class="donut-label">Motor</div></div>
+      <div class="donut-stat"><div class="donut-circle" style="border-color: #ec4899;" id="donut-car">0</div><div class="donut-label">Mobil</div></div>
+      <div class="donut-stat"><div class="donut-circle" style="border-color: #f97316;" id="donut-bus">0</div><div class="donut-label">Bus</div></div>
+      <div class="donut-stat"><div class="donut-circle" style="border-color: #0891b2;" id="donut-truck">0</div><div class="donut-label">Truk</div></div>
     </div>
   </div>
 
-  <!-- Section 7: Distribution Chart -->
   <div class="section">
-    <div class="section-title">Perbandingan Volume Kepadatan (3 bulan)</div>
+    <div class="section-title">Perbandingan Volume Kendaraan (kend./jam)</div>
     <div class="chart-wrapper">
-      <div class="chart-container">
-        <canvas id="distributionChart"></canvas>
-      </div>
+        <div class="chart-container" style="height: 400px;">
+            <canvas id="trendChart"></canvas>
+        </div>
     </div>
   </div>
 
-  <!-- Section 8: Speed Gauges -->
   <div class="section">
-    <div class="section-title">Kecepatan Kepadatan (Survei Kec/jam)</div>
-    
-    <div style="font-weight: 600; color: #6b7280; margin-bottom: 1rem;">Normal</div>
-    <div class="gauge-grid">
-      <div class="gauge-item">
-        <div class="gauge-circle">
-          <div class="gauge-value">16.7</div>
-        </div>
-        <div class="gauge-label">Sepeda Motor</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle">
-          <div class="gauge-value">17.7</div>
-        </div>
-        <div class="gauge-label">Mobil Penumpang</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle">
-          <div class="gauge-value">15.4</div>
-        </div>
-        <div class="gauge-label">Kendaraan Sedang</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle">
-          <div class="gauge-value">10.6</div>
-        </div>
-        <div class="gauge-label">Bus Besar</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle">
-          <div class="gauge-value">14.7</div>
-        </div>
-        <div class="gauge-label">Truk Barang</div>
-      </div>
-    </div>
-
-    <div style="font-weight: 600; color: #6b7280; margin: 2rem 0 1rem;">Padat</div>
-    <div class="gauge-grid">
-      <div class="gauge-item">
-        <div class="gauge-circle" style="border-top-color: #0891b2; border-right-color: #0891b2;">
-          <div class="gauge-value">18.0</div>
-        </div>
-        <div class="gauge-label">Sepeda Motor</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle" style="border-top-color: #0891b2; border-right-color: #0891b2;">
-          <div class="gauge-value">0.0</div>
-        </div>
-        <div class="gauge-label">Mobil Penumpang</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle" style="border-top-color: #0891b2; border-right-color: #0891b2;">
-          <div class="gauge-value">5.6</div>
-        </div>
-        <div class="gauge-label">Kendaraan Sedang</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle" style="border-top-color: #0891b2; border-right-color: #0891b2;">
-          <div class="gauge-value">5.6</div>
-        </div>
-        <div class="gauge-label">Bus Besar</div>
-      </div>
-      <div class="gauge-item">
-        <div class="gauge-circle" style="border-top-color: #0891b2; border-right-color: #0891b2;">
-          <div class="gauge-value">10.8</div>
-        </div>
-        <div class="gauge-label">Truk Barang</div>
-      </div>
-    </div>
+    <div class="section-title">Kecepatan Kendaraan Sesaat (km/jam)</div>
+    <div class="page-subtitle" style="margin-bottom: 1rem;">Di update: <span id="speed-update-time">-</span></div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding-left: 1.5rem;">Jalur</th>
+          <th>Motor</th><th>Mobil</th><th>Bus</th><th>Truk</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="row-header">Atas</td>
+          <td id="speed-normal-motor">0.0</td><td id="speed-normal-car">0.0</td><td id="speed-normal-bus">0.0</td><td id="speed-normal-truck">0.0</td>
+        </tr>
+        <tr>
+          <td class="row-header">Bawah</td>
+          <td id="speed-opposite-motor">0.0</td><td id="speed-opposite-car">0.0</td><td id="speed-opposite-bus">0.0</td><td id="speed-opposite-truck">0.0</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
+  <!-- Garis pemisah sebelum footer -->
+<div style="width: 100%; height: 3px; background: rgba(255, 255, 255, 0.2); margin-top: 2rem;"></div>
+
 
 </div>
 
-<!-- Footer -->
+
+<!-- FOOTER - Full Width (di luar main-container) -->
 <footer class="main-footer">
-  <div class="footer-title">DIREKTORAT BINA TEKNIK JALAN DAN JEMBATAN</div>
-  <div class="footer-subtitle">Kementrian Pekerjaan Umum dan Perumahan Rakyat</div>
+  <div class="footer-title">DINAS KOMUNIKASI DAN INFORMATIKA KOTA BOGOR</div>
+  <div class="footer-subtitle">Pemerintah Daerah Kota Bogor</div>
   <div class="footer-links">
-    <span>📍 Jl. Pattimura No. 20, Kebayoran Baru, Jakarta Selatan</span>
-    <span>📞 021-739-2008</span>
-    <span>✉️ binamarga@pu.go.id</span>
+    <span>📍 Jl. Ir. H. Juanda No.10, RT.01/RW.01, Pabaton, Kecamatan Bogor Tengah, Kota Bogor, Jawa Barat 16121</span>
+    <span>📞 +62251-8321075</span>
+    <span>✉️ kominfo@kotabogor.go.id</span>
   </div>
-  <div class="footer-copyright">© Bogor - 2024</div>
+  <div class="footer-copyright">© Bogor - 2025</div>
 </footer>
 
-<!-- JavaScript -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
 <script>
   window.CCTV_DATA = {{ cctv_data | tojson }};
   window.FEATURED_CCTV_IDX = {{ featured_cctv_idx or 'null' }};
-  window.URLS = {
-    analyze_stream: "{{ url_for('user.analyze_stream', cctv_id=0) }}",
-    analyze_feed: "{{ url_for('user.analyze_feed', cctv_id=0) }}"
-  };
 </script>
-<script src="{{ url_for('static', filename='js/user/dashboard.js') }}"></script>
+
+<script>
+let volumeChart = null;
+let distributionChart = null;
+let trendChart = null;
+
+function initVolumeChart() {
+  const canvas = document.getElementById('volumeChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  volumeChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Motor', 'Mobil', 'Bus', 'Truk'],
+      datasets: [
+        { label: 'Atas', data: [0, 0, 0, 0], backgroundColor: 'rgba(59, 130, 246, 0.8)', borderColor: 'rgb(59, 130, 246)', borderWidth: 1 },
+        { label: 'Bawah', data: [0, 0, 0, 0], backgroundColor: 'rgba(16, 185, 129, 0.8)', borderColor: 'rgb(16, 185, 129)', borderWidth: 1 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', font: { size: 11 } } },
+        y: { beginAtZero: true, min: 0, suggestedMax: 100, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', stepSize: 5, font: { size: 11 } }, title: { display: true, text: 'Jumlah', color: '#fff', font: { size: 12 } } }
+      },
+      plugins: { legend: { labels: { color: '#fff', font: { size: 11 } }, position: 'top' } }
+    }
+  });
+}
+
+function initDistributionChart() {
+  const canvas = document.getElementById('distributionChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  distributionChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Motor', 'Mobil', 'Bus', 'Truk'],
+      datasets: [
+        { label: 'Atas', data: [0, 0, 0, 0], backgroundColor: 'rgba(59, 130, 246, 0.8)', borderColor: 'rgb(59, 130, 246)', borderWidth: 1 },
+        { label: 'Bawah', data: [0, 0, 0, 0], backgroundColor: 'rgba(16, 185, 129, 0.8)', borderColor: 'rgb(16, 185, 129)', borderWidth: 1 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff' }, title: { display: true, text: 'Jenis Kendaraan', color: '#fff' } },
+        y: { beginAtZero: true, min: 0, suggestedMax: 100, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', stepSize: 10 }, title: { display: true, text: 'Jumlah', color: '#fff' } }
+      },
+      plugins: { legend: { labels: { color: '#fff' } } }
+    }
+  });
+}
+
+function initTrendChart() {
+  const canvas = document.getElementById('trendChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  trendChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+      datasets: [{ label: 'Total Kendaraan', data: [0, 0, 0, 0, 0, 0, 0], backgroundColor: 'rgba(255, 206, 86, 0.8)', borderColor: 'rgb(255, 206, 86)', borderWidth: 1 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff' }, title: { display: true, text: 'Waktu', color: '#fff' } },
+        y: { beginAtZero: true, min: 0, suggestedMax: 100, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', stepSize: 10 }, title: { display: true, text: 'Jumlah', color: '#fff' } }
+      },
+      plugins: { legend: { labels: { color: '#fff' } } }
+    }
+  });
+}
+
+function initAnalysisMap() {
+  if (typeof L === 'undefined') return;
+  const map = L.map('map').setView([-6.5950, 106.8166], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
+}
+
+function initSocketListeners() {
+  if (typeof io === 'undefined') return;
+  const socket = io();
+
+  socket.on("update_stats_realtime", d => {
+      console.log("DATA MASUK:", d);
+  });
+  
+  socket.on('update_stats_realtime', function(data) {
+    const jauh_motor = data.counts_jauh_motor || 0;
+    const jauh_mobil = data.counts_jauh_mobil || 0;
+    const jauh_bus = data.counts_jauh_bus || 0;
+    const jauh_truck = data.counts_jauh_truck || 0;
+    const dekat_motor = data.counts_dekat_motor || 0;
+    const dekat_mobil = data.counts_dekat_mobil || 0;
+    const dekat_bus = data.counts_dekat_bus || 0;
+    const dekat_truck = data.counts_dekat_truck || 0;
+
+    document.getElementById('vol-normal-motor').innerText = jauh_motor;
+    document.getElementById('vol-normal-car').innerText = jauh_mobil;
+    document.getElementById('vol-normal-bus').innerText = jauh_bus;
+    document.getElementById('vol-normal-truck').innerText = jauh_truck;
+    document.getElementById('vol-normal-total').innerText = jauh_motor + jauh_mobil + jauh_bus + jauh_truck;
+
+    document.getElementById('vol-opposite-motor').innerText = dekat_motor;
+    document.getElementById('vol-opposite-car').innerText = dekat_mobil;
+    document.getElementById('vol-opposite-bus').innerText = dekat_bus;
+    document.getElementById('vol-opposite-truck').innerText = dekat_truck;
+    document.getElementById('vol-opposite-total').innerText = dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+
+    document.getElementById('vol-grand-motor').innerText = jauh_motor + dekat_motor;
+    document.getElementById('vol-grand-car').innerText = jauh_mobil + dekat_mobil;
+    document.getElementById('vol-grand-bus').innerText = jauh_bus + dekat_bus;
+    document.getElementById('vol-grand-truck').innerText = jauh_truck + dekat_truck;
+    document.getElementById('vol-grand-total').innerText = jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+
+    document.getElementById('table-update-time').innerText = new Date().toLocaleString('id-ID');
+    document.getElementById('speed-update-time').innerText = new Date().toLocaleString('id-ID');
+
+    document.getElementById('donut-motor').innerText = jauh_motor + dekat_motor;
+    document.getElementById('donut-car').innerText = jauh_mobil + dekat_mobil;
+    document.getElementById('donut-bus').innerText = jauh_bus + dekat_bus;
+    document.getElementById('donut-truck').innerText = jauh_truck + dekat_truck;
+
+    // === UPDATE KECEPATAN KENDARAAN ===
+    if (data.speed_jauh !== undefined) {
+        document.getElementById('speed-normal-motor').innerText = data.speed_jauh.toFixed(1);
+        document.getElementById('speed-normal-car').innerText = data.speed_jauh.toFixed(1);
+        document.getElementById('speed-normal-bus').innerText = data.speed_jauh.toFixed(1);
+        document.getElementById('speed-normal-truck').innerText = data.speed_jauh.toFixed(1);
+    }
+
+    if (data.speed_dekat !== undefined) {
+        document.getElementById('speed-opposite-motor').innerText = data.speed_dekat.toFixed(1);
+        document.getElementById('speed-opposite-car').innerText = data.speed_dekat.toFixed(1);
+        document.getElementById('speed-opposite-bus').innerText = data.speed_dekat.toFixed(1);
+        document.getElementById('speed-opposite-truck').innerText = data.speed_dekat.toFixed(1);
+    }
+
+    if (volumeChart) {
+        volumeChart.data.labels = ["Motor", "Mobil", "Bus", "Truk"]; // tetap
+        volumeChart.data.datasets[0].data = [jauh_motor, jauh_mobil, jauh_bus, jauh_truck];
+        volumeChart.data.datasets[1].data = [dekat_motor, dekat_mobil, dekat_bus, dekat_truck];
+        volumeChart.update();
+    }
+    if (distributionChart) {
+      distributionChart.data.datasets[0].data = [jauh_motor, jauh_mobil, jauh_bus, jauh_truck];
+      distributionChart.data.datasets[1].data = [dekat_motor, dekat_mobil, dekat_bus, dekat_truck];
+      distributionChart.update();
+    }
+    if (trendChart) {
+      const hourIndex = Math.floor(new Date().getHours() / 4);
+      trendChart.data.datasets[0].data[hourIndex] = jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+      trendChart.update();
+    }
+  });
+}
+
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    initAnalysisMap();
+    initVolumeChart();
+    initDistributionChart();
+    initTrendChart();
+    initSocketListeners();
+  }, 200);
+});
+</script>
 
 {% endblock %}
 
 {% block scripts %}
-
-<script>
-    function getGaugeChartConfig(label, value, max, color) {
-        // Karena Chart.js tidak memiliki tipe "gauge" bawaan, kita gunakan Doughnut Chart yang dimodifikasi
-        const percentage = (value / max) * 100;
-        return {
-            type: 'doughnut',
-            data: {
-                labels: [label, 'Sisa'],
-                datasets: [{
-                    data: [value, max - value],
-                    backgroundColor: [color, 'rgba(255, 255, 255, 0.1)'],
-                    borderWidth: 0,
-                }]
-            },
-            options: {
-                circumference: 180, // Hanya gambar setengah lingkaran
-                rotation: 270,      // Mulai dari bawah
-                cutout: '80%',      // Cincin tebal
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    title: { display: true, text: `${value} km/jam`, position: 'bottom', color: 'white', font: { size: 14, weight: 'bold' } }
-                }
-            }
-        };
-    }
-    
-    // --- 1. INI ADALAH FUNGSI INTI UNTUK MENGISI DATA REAL-TIME ---
-    function initSocketListeners() {
-        const socket = io(); // Asumsi io() sudah diimpor di base.html
-        
-        socket.on('update_stats', function(data) {
-            // Kita harus mengadaptasi data dari analyzer.py ke ID HTML
-            
-            let motor_total = (data.counts_jauh_motor || 0) + (data.counts_dekat_motor || 0);
-            let mobil_total = (data.counts_jauh_mobil || 0) + (data.counts_dekat_mobil || 0);
-            let bus_total = (data.counts_jauh_bus || 0) + (data.counts_dekat_bus || 0);
-            let truck_total = (data.counts_jauh_truck || 0) + (data.counts_dekat_truck || 0);
-            let person_total = (data.counts_jauh_person || 0) + (data.counts_dekat_person || 0);
-            
-            // Perbarui Stat Box (Section 4)
-            document.getElementById('personCount').innerText = person_total;
-            document.getElementById('carCount').innerText = mobil_total;
-            document.getElementById('motorcycleCount').innerText = motor_total;
-            document.getElementById('busCount').innerText = bus_total;
-            document.getElementById('truckCount').innerText = truck_total;
-            
-            // Perbarui Total Deteksi
-            document.getElementById('total-detections').innerText = mobil_total + truck_total + motor_total + bus_total + person_total;
-        });
-    }
-
-    // --- 2. INISIALISASI CHART (Section 3) ---
-    function initVolumeChart() {
-        // Data Placeholder Volume Kendaraan (Sesuai Contoh Gambar)
-        const ctx = document.getElementById('volumeChart').getContext('2d');
-        const labels = ['Gol-1', 'Gol-2', 'Gol-3', 'Gol-4', 'Gol-5', 'Gol-6', 'Gol-7', 'Gol-8'];
-        const dataNormal = [45, 18, 5, 0, 0, 0, 5, 1]; 
-        const dataOpposite = [55, 20, 8, 0, 0, 0, 7, 2];
-    
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{ label: 'Normal', data: dataNormal, backgroundColor: 'rgba(59, 130, 246, 0.8)' },
-                           { label: 'Opposite', data: dataOpposite, backgroundColor: 'rgba(16, 185, 129, 0.8)' }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: 'white' } }, y: { stacked: true, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: 'white' } } }, plugins: { legend: { labels: { color: 'white' } } }
-            }
-        });
-    }
-    
-    // --- 3. INISIALISASI PETA (Section 1) ---
-    function initAnalysisMap() {
-        const map = L.map('map').setView([-6.5950, 106.8166], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 18, }).addTo(map);
-        // Logika untuk menampilkan batas wilayah dan marker kepadatan Anda ditambahkan di sini.
-    }
-
-    // --- PANGGIL SEMUA FUNGSI SAAT HALAMAN SELESAI DIMUAT ---
-    document.addEventListener('DOMContentLoaded', function() {
-        initSocketListeners();
-        initVolumeChart();
-        initAnalysisMap();
-        // Anda bisa menambahkan inisialisasi untuk donut chart dan gauge charts lainnya di sini
-    });
-</script>
-
 {% endblock %}
