@@ -9,7 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
 
     <!-- 1. TAMBAHKAN LIBRARY SOCKET.IO -->
-      <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
       .clickable-toast {
         cursor: pointer;
@@ -252,68 +252,66 @@
     <!-- 2. TAMBAHKAN SCRIPT PENDENGAR SOCKET.IO DI SINI -->
     <script>
       // Pastikan 'io' ada (dari library yg dimuat di <head>)
-      if (typeof io !== "undefined") {
+      if (typeof io !== 'undefined') {
         // 1. Hubungkan ke server
         const socket = io();
 
         // 2. (Opsional) Cek di console browser apakah koneksi berhasil
-        socket.on("connect", () => {
-          console.log("Berhasil terhubung ke server Socket.IO.");
+        socket.on('connect', () => {
+          console.log('Berhasil terhubung ke server Socket.IO.');
         });
 
-        socket.on("disconnect", () => {
-          console.warn("Koneksi Socket.IO terputus.");
+        socket.on('disconnect', () => {
+          console.warn('Koneksi Socket.IO terputus.');
         });
 
         // 3. INI BAGIAN UTAMA: Mendengarkan event 'notifikasi_baru' dari server
-          socket.on("notifikasi_baru", (data) => {
-            console.log("Menerima Notifikasi Baru:", data);
+        socket.on('notifikasi_baru', (data) => {
+          console.log('Menerima Notifikasi Baru:', data);
 
-            // --- INI SATU-SATUNYA KODE YANG ANDA BUTUHKAN ---
-            Swal.fire({
-             // Properti dasar toast
-               toast: true,
-              position: "top-end",
-              showConfirmButton: false,
-              timer: 5000,
-              timerProgressBar: true,
+          // --- INI SATU-SATUNYA KODE YANG ANDA BUTUHKAN ---
+          Swal.fire({
+            // Properti dasar toast
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 5000,
+            timerProgressBar: true,
 
-              // Properti konten
-              icon: data.icon || "warning",
-              title: data.title || "Pelanggaran Terdeteksi!",
-              text: data.detail || "Cek dashboard untuk detail.",
+            // Properti konten
+            icon: data.icon || 'warning',
+            title: data.title || 'Pelanggaran Terdeteksi!',
+            text: data.detail || 'Cek dashboard untuk detail.',
 
-              // --- INI BAGIAN PENTING UNTUK KLIK ---
+            // --- INI BAGIAN PENTING UNTUK KLIK ---
 
-              // 1. Fungsi 'onClick' bawaan SweetAlert
-              onClick: () => {
-                  // Langsung arahkan ke halaman deteksi
-                  window.location.href = "{{ url_for('admin.deteksi') }}";
-              },
+            // 1. Fungsi 'onClick' bawaan SweetAlert
+            onClick: () => {
+              // Langsung arahkan ke halaman deteksi
+              window.location.href = "{{ url_for('admin.deteksi') }}";
+            },
 
-              // 2. Terapkan CSS 'clickable-toast'
-              customClass: {
-                  popup: 'clickable-toast'
-              },
+            // 2. Terapkan CSS 'clickable-toast'
+            customClass: {
+              popup: 'clickable-toast',
+            },
 
-              // 3. Fungsi 'didOpen' untuk timer
-              didOpen: (toast) => {
-                toast.addEventListener("mouseenter", Swal.stopTimer);
-                toast.addEventListener("mouseleave", Swal.resumeTimer);
-              }
-            });
-            // --- AKHIR DARI KODE BARU ---
+            // 3. Fungsi 'didOpen' untuk timer
+            didOpen: (toast) => {
+              toast.addEventListener('mouseenter', Swal.stopTimer);
+              toast.addEventListener('mouseleave', Swal.resumeTimer);
+            },
           });
+          // --- AKHIR DARI KODE BARU ---
+        });
 
-          // Nanti kita bisa tambahkan kode di sini untuk update ikon lonceng
-          // jika Anda menambahkannya di base.html ini.
-
+        // Nanti kita bisa tambahkan kode di sini untuk update ikon lonceng
+        // jika Anda menambahkannya di base.html ini.
       } else {
-        console.error("Socket.IO library gagal dimuat. Notifikasi real-time tidak akan berfungsi.");
+        console.error('Socket.IO library gagal dimuat. Notifikasi real-time tidak akan berfungsi.');
       }
     </script>
     <!-- AKHIR DARI BLOK SCRIPT SOCKET.IO -->
-
 
     {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %}
     <script>
@@ -330,5 +328,10 @@
       });
     </script>
     {% endif %} {% endwith %}
+
+    <!-- CONTAINER NOTIFIKASI GLOBAL -->
+    <div id="global-toast-container" class="fixed top-4 right-4 z-[9999] space-y-3 pointer-events-none"></div>
+
+    <script src="{{ url_for('static', filename='js/notification_socket.js') }}"></script>
   </body>
 </html>
