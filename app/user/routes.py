@@ -336,7 +336,7 @@ def get_detection_status(cctv_id: int):
 @user_bp.route("/api/scan/<int:cctv_id>/data")
 def get_scan_data(cctv_id: int):
     cctv = CCTV.query.get_or_404(cctv_id)
-    stats = LATEST_DETECTION_STATS.get(cctv.lokasi)
+    stats = LATEST_DETECTION_STATS.get(cctv.lokasi.upper())
     if stats and "total_counts" in stats:
         detection_counts = stats["total_counts"]
     else:
