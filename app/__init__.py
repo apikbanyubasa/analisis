@@ -74,6 +74,6 @@ def create_app():
     @app.route("/")
     def home():
         # Mengarahkan halaman utama ke dashboard user
-        return redirect(url_for("user.dashboard"))
+        return redirect(url_for("user.kepadatan"))
 
     return app

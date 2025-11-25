@@ -680,11 +680,25 @@ def draw_bounding_boxes(
         crowd_member_ids = set()
     output_frame = frame.copy()
 
-    (l1_x1, l1_y1), (l2_x1, l2_y2) = LINE_1_COORDS
-    (l2_x1, l2_y1), (l2_x2, l2_y2) = LINE_2_COORDS
+    # 💡 PERBAIKAN: Menggambar kedua garis hitungan secara eksplisit
+    # Garis Atas (LINE_1_COORDS)
+    cv2.line(
+        output_frame,
+        LINE_1_COORDS[0],
+        LINE_1_COORDS[1],
+        (0, 255, 255),  # Warna Kuning/Cyan
+        2,
+    )
 
-    cv2.line(output_frame, (l1_x1, l1_y1), (l2_x1, l1_y1), (0, 255, 255), 2)
-    cv2.line(output_frame, (l2_x1, l2_y1), (l2_x2, l2_y2), (0, 255, 255), 2)
+    # Garis Bawah (LINE_2_COORDS)
+    cv2.line(
+        output_frame,
+        LINE_2_COORDS[0],
+        LINE_2_COORDS[1],
+        (0, 255, 255),  # Warna Kuning/Cyan
+        2,
+    )
+    # ------------------- AKHIR PERBAIKAN -------------------
 
     h, w, _ = output_frame.shape
 
@@ -1256,7 +1270,13 @@ def run_detection_worker(
                         else:
                             speed_values.append(0)
 
-                avg_speed = sum(speed_values) / len(speed_values) if speed_values else 0
+                # Menghindari ZeroDivisionError
+                valid_speed_values = [s for s in speed_values if s > 0]
+                avg_speed = (
+                    sum(valid_speed_values) / len(valid_speed_values)
+                    if valid_speed_values
+                    else 0
+                )
 
                 speed_jauh = []
                 speed_dekat = []
@@ -1265,9 +1285,9 @@ def run_detection_worker(
                     # dicek apakah object berada di jalur jauh atau dekat
                     try:
                         last_y = obj["last_y"]
-                        if last_y < LINE_1_COORDS[0][1]:
+                        if last_y < LINE_1_COORDS[0][1] and obj["speed"] > 0:
                             speed_jauh.append(obj["speed"])
-                        elif last_y > LINE_2_COORDS[0][1]:
+                        elif last_y > LINE_2_COORDS[0][1] and obj["speed"] > 0:
                             speed_dekat.append(obj["speed"])
                     except:
                         pass

@@ -71,7 +71,7 @@ def swap_coords(coords):
     return coords
 
 
-@user_bp.route("/")
+
 @user_bp.route("/dashboard")
 def dashboard():
     all_cctv = CCTV.query.order_by(CCTV.lokasi).all()
@@ -238,7 +238,7 @@ def cctv():
 
 # Di dalam app/user/routes.py
 
-
+@user_bp.route("/")
 @user_bp.route("/kepadatan")  # <-- Ini adalah URL baru Anda
 def kepadatan():
     """

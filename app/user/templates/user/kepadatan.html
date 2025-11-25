@@ -1,47 +1,69 @@
-{% extends "base.html" %}
-
-{% block title %}Dashboard Analisis Lalu Lintas{% endblock %}
-
-{% block head %}
-{{ super() }}
+{% extends "base.html" %} {% block title %}Dashboard Analisis Lalu Lintas{% endblock %} {% block head %} {{ super() }}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet" />
 
 <style>
-  #app, #root, [x-data], main, .container, .content {
+  #app,
+  #root,
+  [x-data],
+  main,
+  .container,
+  .content {
     height: auto !important;
     min-height: auto !important;
     max-height: none !important;
     overflow: visible !important;
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-  html, body {
-    background: #0f1419;
-    color: #e5e7eb;
-    font-family: "Inter", -apple-system, sans-serif;
-    overflow-x: hidden;
-    overflow-y: auto !important;
-    height: auto !important;
+  html,
+  body {
+    background: #0e1222;
+    color: #0e1222;
+    font-family: 'Inter', -apple-system, sans-serif;
+
+    overflow-y: scroll; /* <-- WAJIB pake scroll, bukan auto */
+    overflow-x: hidden; /* optional */
+
+    height: 100%;
     min-height: 100vh;
   }
 
-  body > div, body > main, .content-wrapper {
+  /* Chrome, Edge, Safari */
+  body::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Firefox */
+  body {
+    scrollbar-width: none;
+  }
+  html,
+  body,
+  .main-container {
+    scrollbar-width: none !important;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  .main-container::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  body > div,
+  body > main,
+  .content-wrapper {
     height: auto !important;
     min-height: auto !important;
     overflow: visible !important;
-  }
-
-  /* Main container - untuk konten utama */
-  .main-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0;
-    background: #1a1f3a;
   }
 
   .section {
@@ -59,21 +81,26 @@
     border-bottom: 2px solid #e74c3c;
   }
 
-  .section-title-highlight { color: #ffd700; font-weight: 700; }
-  .page-subtitle { color: #cbd5e1; font-size: 0.85rem; }
+  .section-title-highlight {
+    color: #ffd700;
+    font-weight: 700;
+  }
+  .page-subtitle {
+    color: #cbd5e1;
+    font-size: 0.85rem;
+  }
 
   .map-section {
-    border: 3px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    padding: 10px;
-    margin: 1.5rem 2rem 0;
     background: #1a1f3a;
     height: 450px;
     position: relative;
     overflow: hidden;
   }
 
-  #map { height: 100%; width: 100%; border-radius: 8px; }
+  #map {
+    height: 100%;
+    width: 100%;
+  }
 
   .video-player-container {
     background: #000;
@@ -84,12 +111,20 @@
   }
 
   .video-placeholder {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    color: #6b7280; font-size: 0.9rem;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    font-size: 0.9rem;
   }
 
-  #detection-stream { width: 100%; height: 100%; object-fit: contain; }
+  #detection-stream {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
 
   .card {
     background: #2d3561;
@@ -140,7 +175,9 @@
     overflow: hidden;
   }
 
-  .data-table thead { background: linear-gradient(135deg, #3d4771 0%, #2d3561 100%); }
+  .data-table thead {
+    background: linear-gradient(135deg, #3d4771 0%, #2d3561 100%);
+  }
 
   .data-table th {
     padding: 1rem;
@@ -159,7 +196,9 @@
     font-size: 0.9rem;
   }
 
-  .data-table tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+  .data-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
 
   .data-table .row-header {
     font-weight: 600;
@@ -169,9 +208,21 @@
     padding-left: 1.5rem;
   }
 
-  .data-table .total-row { background: rgba(231, 76, 60, 0.15); font-weight: 700; }
-  .data-table .total-cell { color: #1abc9c; font-weight: 700; font-size: 1.1rem; }
-  .data-table .grand-total { background: rgba(26, 188, 156, 0.2); color: #1abc9c; font-weight: 700; font-size: 1.2rem; }
+  .data-table .total-row {
+    background: rgba(231, 76, 60, 0.15);
+    font-weight: 700;
+  }
+  .data-table .total-cell {
+    color: #1abc9c;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  .data-table .grand-total {
+    background: rgba(26, 188, 156, 0.2);
+    color: #1abc9c;
+    font-weight: 700;
+    font-size: 1.2rem;
+  }
 
   .donut-stats-grid {
     display: grid;
@@ -180,20 +231,30 @@
     margin-top: 1.5rem;
   }
 
-  .donut-stat { text-align: center; }
+  .donut-stat {
+    text-align: center;
+  }
 
   .donut-circle {
-    width: 140px; height: 140px;
+    width: 140px;
+    height: 140px;
     margin: 0 auto 1rem;
     border-radius: 50%;
     border: 12px solid;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 2rem; font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
     color: white;
     background: #2d3561;
   }
 
-  .donut-label { font-size: 0.85rem; color: #cbd5e1; font-weight: 500; }
+  .donut-label {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    font-weight: 500;
+  }
 
   /* HEADER - Full Width */
   .main-header {
@@ -215,169 +276,363 @@
     border-top: 3px solid #e74c3c;
   }
 
-  .footer-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
-  .footer-subtitle { font-size: 0.8rem; color: #cbd5e1; margin-bottom: 1rem; }
-  .footer-links { 
-    display: flex; 
-    justify-content: center; 
-    flex-wrap: wrap;
-    gap: 1.5rem; 
-    font-size: 0.75rem; 
-    margin-bottom: 1rem; 
-    color: #94a3b8; 
+  .footer-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
   }
-  .footer-copyright { font-size: 0.75rem; color: #ffd700; font-weight: 500; }
+  .footer-subtitle {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    margin-bottom: 1rem;
+  }
+  .footer-links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    font-size: 0.75rem;
+    margin-bottom: 1rem;
+    color: #94a3b8;
+  }
+  .footer-copyright {
+    font-size: 0.75rem;
+    color: #ffd700;
+    font-weight: 500;
+  }
+  /* Supaya map tidak menimpa header */
+  .leaflet-container {
+    z-index: 10 !important;
+  }
+
+  .leaflet-pane,
+  .leaflet-top,
+  .leaflet-bottom {
+    z-index: 10 !important;
+  }
+  .video-player-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+  }
 </style>
-{% endblock %}
+{% endblock %} {% block content %}
 
-{% block content %}
-<!-- HEADER - Full Width (di luar main-container) -->
-<header class="main-header">
-  <div class="flex items-center space-x-2">
-    <img src="{{ url_for('static', filename='img/logo_bogor.svg') }}" alt="Logo" class="h-16 w-16 object-contain" />
-    <div class="flex flex-col">
-      <span class="text-white font-semibold text-2xl relative -top-2">PEMERINTAH DAERAH KOTA BOGOR</span>
-      <span class="text-yellow-400 text-sm">Lalu Lintas Terklasifikasi Berbasis AI</span>
-    </div>
-  </div>
-  <div class="flex items-center space-x-3 relative -top-4">
-    <button @click="sidebarOpen = !sidebarOpen" class="focus:outline-none p-[6px] bg-[#141B35] text-white rounded shadow">
-      <img src="{{ url_for('static', filename='img/burger.svg') }}" alt="Menu Icon" class="h-5 w-5" />
-    </button>
-  </div>
-</header>
-
-<!-- MAIN CONTENT - Centered dengan max-width -->
-<div class="main-container">
-  
-  <div class="section">
-    <div class="section-title">Titik Lokasi CCTV: <span class="section-title-highlight">{{ featured_cctv_lokasi or "Pilih CCTV" }}</span></div>
-  </div>
-
-  <div class="map-section">
-    <div id="map"></div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Perkembangan Kepadatan: <span class="section-title-highlight" id="current-location">{{ featured_cctv_lokasi or "Pilih CCTV" }}</span></div>
-    <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.5rem; align-items: stretch; margin-top: 1rem; height: 400px;">
-      <div class="card" style="padding: 0; background:#000; border-radius:8px; overflow:hidden; height: 100%;">
-        <div class="video-player-container" style="height: 100%;">
-          {% if featured_cctv_idx is not none %}
-          <img id="detection-stream" src="{{ url_for('user.analyze_stream', cctv_id=featured_cctv_idx) }}" alt="CCTV Stream" style="width:100%; height:100%; object-fit:cover;">
-          {% else %}
-          <div class="video-placeholder"><p>⚠️ This live stream recording is not available.</p></div>
-          {% endif %}
+<body class="h-screen bg-[#0e1222]">
+  <!-- HEADER FIXED -->
+  <div class="fixed top-0 left-0 w-full z-50 bg-[#0E1222] shadow">
+    <header class="flex justify-between items-center p-4">
+      <div class="flex items-center space-x-2">
+        <img src="{{ url_for('static', filename='img/logo_bogor.svg') }}" alt="Logo" class="h-16 w-16 object-contain" />
+        <div class="flex flex-col">
+          <span class="text-white font-semibold text-2xl relative -top-2">PEMERINTAH DAERAH KOTA BOGOR</span>
+          <span class="text-yellow-400 text-sm">Dashboard Analisis Lalu Lintas</span>
         </div>
       </div>
-      <div class="card" style="padding: 1rem; display: flex; flex-direction: column; height: 100%;">
-        <div style="color:white; font-weight:700; margin-bottom: 0.75rem;">Volume Kepadatan (Real-time)</div>
-        <div style="flex: 1; min-height: 0; position: relative;">
-          <canvas id="volumeChart"></canvas>
+      <div class="flex items-center space-x-3 relative -top-4">
+        <button
+          @click="sidebarOpen = !sidebarOpen"
+          class="focus:outline-none p-[6px] bg-[#141B35] text-white rounded shadow"
+        >
+          <img src="{{ url_for('static', filename='img/burger.svg') }}" alt="Menu Icon" class="h-5 w-5" />
+        </button>
+      </div>
+    </header>
+  </div>
+
+  <!-- MAIN CONTENT - Centered dengan max-width -->
+  <div class="pt-28 pb-6 main-container max-w-[1500px] mx-auto space-y-6">
+    <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
+      <div class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="text-yellow-400"
+        >
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+        Titik Lokasi CCTV:
+        <span class="text-yellow-400 font-bold">{{ featured_cctv_lokasi or "Pilih CCTV" }}</span>
+      </div>
+      <div class="map-section rounded-lg">
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
+      <div class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="text-green-400"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+          <path d="M10 9H8" />
+        </svg>
+        Perkembangan Kepadatan:
+        <span class="text-yellow-400 font-bold" id="current-location">{{ featured_cctv_lokasi or "Pilih CCTV" }}</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch" style="height: 400px">
+        <div class="col-span-2 bg-black rounded-lg overflow-hidden shadow-xl relative">
+          <div class="video-player-container h-full">
+            {% if featured_cctv_idx is not none %}
+            <img
+              id="detection-stream"
+              src="{{ url_for('user.analyze_stream', cctv_id=featured_cctv_idx) }}"
+              alt="CCTV Stream"
+              class="w-full h-full object-cover"
+            />
+            {% else %}
+            <div class="video-placeholder flex items-center justify-center h-full text-gray-400 bg-gray-900">
+              <p class="p-4 rounded-lg bg-gray-700/50">⚠️ Rekaman siaran langsung ini tidak tersedia.</p>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="bg-gray-900 p-4 rounded-lg shadow-xl flex flex-col h-full">
+          <div class="text-white font-bold mb-3">Volume Kepadatan (Real-time)</div>
+          <div class="flex-1 relative min-h-0">
+            <canvas id="volumeChart"></canvas>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="section">
-    <div class="section-title">Volume Kendaraan (kend./menit)</div>
-    <div class="page-subtitle" style="margin-bottom: 1rem;"> <span id="table-update-time">-</span></div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th style="text-align: left; padding-left: 1.5rem;">Jalur</th>
-          <th>Motor</th><th>Mobil</th><th>Bus</th><th>Truk</th>
-          <th style="background: rgba(26, 188, 156, 0.2);">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="row-header">Atas</td>
-          <td id="vol-normal-motor">0</td><td id="vol-normal-car">0</td><td id="vol-normal-bus">0</td><td id="vol-normal-truck">0</td>
-          <td class="total-cell" id="vol-normal-total">0</td>
-        </tr>
-        <tr>
-          <td class="row-header">Bawah</td>
-          <td id="vol-opposite-motor">0</td><td id="vol-opposite-car">0</td><td id="vol-opposite-bus">0</td><td id="vol-opposite-truck">0</td>
-          <td class="total-cell" id="vol-opposite-total">0</td>
-        </tr>
-        <tr class="total-row">
-          <td class="row-header">Grand Total</td>
-          <td class="total-cell" id="vol-grand-motor">0</td><td class="total-cell" id="vol-grand-car">0</td><td class="total-cell" id="vol-grand-bus">0</td><td class="total-cell" id="vol-grand-truck">0</td>
-          <td class="grand-total" id="vol-grand-total">0</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Volume Kendaraan Harian (kend./jam)</div>
-    <div class="chart-wrapper"><div class="chart-container" style="height: 400px;"><canvas id="distributionChart"></canvas></div></div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Total Volume Kendaraan Harian (kend./hari)</div>
-    <div class="donut-stats-grid">
-      <div class="donut-stat"><div class="donut-circle" style="border-color: #a855f7;" id="donut-motor">0</div><div class="donut-label">Motor</div></div>
-      <div class="donut-stat"><div class="donut-circle" style="border-color: #ec4899;" id="donut-car">0</div><div class="donut-label">Mobil</div></div>
-      <div class="donut-stat"><div class="donut-circle" style="border-color: #f97316;" id="donut-bus">0</div><div class="donut-label">Bus</div></div>
-      <div class="donut-stat"><div class="donut-circle" style="border-color: #0891b2;" id="donut-truck">0</div><div class="donut-label">Truk</div></div>
+    <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
+      <div class="text-xl font-semibold text-white mb-2 flex items-center gap-2">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="text-orange-400"
+        >
+          <path d="M17 20a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h12c1.1 0 2 .9 2 2v16z" />
+          <path d="M17 12H7" />
+          <path d="M10 16l-3-3 3-3" />
+          <path d="M22 17l-5-5-5 5" />
+        </svg>
+        Volume Kendaraan (kend./menit)
+      </div>
+      <div class="text-sm text-gray-400 mb-4">
+        Diperbarui: <span id="table-update-time" class="font-medium">-</span>
+      </div>
+      <table class="w-full text-sm text-left text-gray-300 rounded-lg overflow-hidden">
+        <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+          <tr>
+            <th scope="col" class="py-3 px-6 text-left">Jalur</th>
+            <th scope="col" class="py-3 px-6 text-center">Motor</th>
+            <th scope="col" class="py-3 px-6 text-center">Mobil</th>
+            <th scope="col" class="py-3 px-6 text-center">Bus</th>
+            <th scope="col" class="py-3 px-6 text-center">Truk</th>
+            <th scope="col" class="py-3 px-6 text-center bg-teal-800/50 text-teal-300 font-bold">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-gray-700 hover:bg-gray-700/50 transition">
+            <td class="py-3 px-6 font-medium text-white">Atas</td>
+            <td class="py-3 px-6 text-center" id="vol-normal-motor">0</td>
+            <td class="py-3 px-6 text-center" id="vol-normal-car">0</td>
+            <td class="py-3 px-6 text-center" id="vol-normal-bus">0</td>
+            <td class="py-3 px-6 text-center" id="vol-normal-truck">0</td>
+            <td class="py-3 px-6 text-center font-bold text-teal-400 bg-gray-900" id="vol-normal-total">0</td>
+          </tr>
+          <tr class="border-b border-gray-700 hover:bg-gray-700/50 transition">
+            <td class="py-3 px-6 font-medium text-white">Bawah</td>
+            <td class="py-3 px-6 text-center" id="vol-opposite-motor">0</td>
+            <td class="py-3 px-6 text-center" id="vol-opposite-car">0</td>
+            <td class="py-3 px-6 text-center" id="vol-opposite-bus">0</td>
+            <td class="py-3 px-6 text-center" id="vol-opposite-truck">0</td>
+            <td class="py-3 px-6 text-center font-bold text-teal-400 bg-gray-900" id="vol-opposite-total">0</td>
+          </tr>
+          <tr class="bg-gray-900 border-t-2 border-yellow-500/50">
+            <td class="py-3 px-6 font-extrabold text-yellow-400">Grand Total</td>
+            <td class="py-3 px-6 text-center font-extrabold text-yellow-400" id="vol-grand-motor">0</td>
+            <td class="py-3 px-6 text-center font-extrabold text-yellow-400" id="vol-grand-car">0</td>
+            <td class="py-3 px-6 text-center font-extrabold text-yellow-400" id="vol-grand-bus">0</td>
+            <td class="py-3 px-6 text-center font-extrabold text-yellow-400" id="vol-grand-truck">0</td>
+            <td class="py-3 px-6 text-center font-extrabold text-2xl text-red-500" id="vol-grand-total">0</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-  </div>
 
-  <div class="section">
-    <div class="section-title">Perbandingan Volume Kendaraan (kend./jam)</div>
-    <div class="chart-wrapper">
-        <div class="chart-container" style="height: 400px;">
-            <canvas id="trendChart"></canvas>
+    <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
+      <div class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="text-blue-400"
+        >
+          <path d="M3 3v18h18" />
+          <path d="M18.7 8.3L15 12l-3-3-4 4-2-2" />
+        </svg>
+        Volume Kendaraan Harian (kend./jam)
+      </div>
+      <div class="chart-wrapper">
+        <div class="h-96">
+          <canvas id="distributionChart"></canvas>
         </div>
+      </div>
+    </div>
+
+    <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
+      <div class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="text-red-400"
+        >
+          <path d="M10 2a8 8 0 1 0 8 8" />
+          <path d="M10 2v8h8" />
+          <path d="M12 12v.01" />
+        </svg>
+        Total Volume Kendaraan Harian (kend./hari)
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center donut-stats-grid">
+        <div class="flex flex-col items-center p-3 bg-gray-900 rounded-lg shadow-md">
+          <div
+            class="w-24 h-24 rounded-full border-4 flex items-center justify-center text-2xl font-bold text-white transition duration-300 hover:scale-105"
+            style="border-color: #a855f7"
+            id="donut-motor"
+          >
+            0
+          </div>
+          <div class="text-sm text-gray-400 mt-2 font-medium">Motor</div>
+        </div>
+        <div class="flex flex-col items-center p-3 bg-gray-900 rounded-lg shadow-md">
+          <div
+            class="w-24 h-24 rounded-full border-4 flex items-center justify-center text-2xl font-bold text-white transition duration-300 hover:scale-105"
+            style="border-color: #ec4899"
+            id="donut-car"
+          >
+            0
+          </div>
+          <div class="text-sm text-gray-400 mt-2 font-medium">Mobil</div>
+        </div>
+        <div class="flex flex-col items-center p-3 bg-gray-900 rounded-lg shadow-md">
+          <div
+            class="w-24 h-24 rounded-full border-4 flex items-center justify-center text-2xl font-bold text-white transition duration-300 hover:scale-105"
+            style="border-color: #f97316"
+            id="donut-bus"
+          >
+            0
+          </div>
+          <div class="text-sm text-gray-400 mt-2 font-medium">Bus</div>
+        </div>
+        <div class="flex flex-col items-center p-3 bg-gray-900 rounded-lg shadow-md">
+          <div
+            class="w-24 h-24 rounded-full border-4 flex items-center justify-center text-2xl font-bold text-white transition duration-300 hover:scale-105"
+            style="border-color: #0891b2"
+            id="donut-truck"
+          >
+            0
+          </div>
+          <div class="text-sm text-gray-400 mt-2 font-medium">Truk</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
+      <div class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="text-purple-400"
+        >
+          <path d="M12 20a8 8 0 0 1-8-8c0-5.5 4.5-8 8-8s8 2.5 8 8-4.5 8-8 8z" />
+          <path d="M12 12v-6" />
+          <path d="M12 18v2" />
+          <path d="M16 16l-2-2" />
+        </svg>
+        Perbandingan Volume Kendaraan (kend./jam)
+      </div>
+      <div class="chart-wrapper">
+        <div class="h-96">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
+      <div class="text-xl font-semibold text-white mb-2 flex items-center gap-2">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="text-yellow-400"
+        >
+          <path d="M12 19a7 7 0 1 0 0-14 7 7 0 0 0 0 14z" />
+          <path d="M15 15l-3 3-3-3" />
+          <path d="M12 12V5" />
+        </svg>
+        Kecepatan Kendaraan Sesaat (km/jam)
+      </div>
+      <div class="text-sm text-gray-400 mb-4">Di update: <span id="speed-update-time" class="font-medium">-</span></div>
+      <table class="w-full text-sm text-left text-gray-300 rounded-lg overflow-hidden">
+        <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+          <tr>
+            <th scope="col" class="py-3 px-6 text-left">Jalur</th>
+            <th scope="col" class="py-3 px-6 text-center">Motor</th>
+            <th scope="col" class="py-3 px-6 text-center">Mobil</th>
+            <th scope="col" class="py-3 px-6 text-center">Bus</th>
+            <th scope="col" class="py-3 px-6 text-center">Truk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-gray-700 hover:bg-gray-700/50 transition">
+            <td class="py-3 px-6 font-medium text-white">Atas</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-normal-motor">0.0</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-normal-car">0.0</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-normal-bus">0.0</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-normal-truck">0.0</td>
+          </tr>
+          <tr class="hover:bg-gray-700/50 transition">
+            <td class="py-3 px-6 font-medium text-white">Bawah</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-opposite-motor">0.0</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-opposite-car">0.0</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-opposite-bus">0.0</td>
+            <td class="py-3 px-6 text-center font-semibold" id="speed-opposite-truck">0.0</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
-
-  <div class="section">
-    <div class="section-title">Kecepatan Kendaraan Sesaat (km/jam)</div>
-    <div class="page-subtitle" style="margin-bottom: 1rem;">Di update: <span id="speed-update-time">-</span></div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th style="text-align: left; padding-left: 1.5rem;">Jalur</th>
-          <th>Motor</th><th>Mobil</th><th>Bus</th><th>Truk</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="row-header">Atas</td>
-          <td id="speed-normal-motor">0.0</td><td id="speed-normal-car">0.0</td><td id="speed-normal-bus">0.0</td><td id="speed-normal-truck">0.0</td>
-        </tr>
-        <tr>
-          <td class="row-header">Bawah</td>
-          <td id="speed-opposite-motor">0.0</td><td id="speed-opposite-car">0.0</td><td id="speed-opposite-bus">0.0</td><td id="speed-opposite-truck">0.0</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  <!-- Garis pemisah sebelum footer -->
-<div style="width: 100%; height: 3px; background: rgba(255, 255, 255, 0.2); margin-top: 2rem;"></div>
-
-
-</div>
-
-
-<!-- FOOTER - Full Width (di luar main-container) -->
-<footer class="main-footer">
-  <div class="footer-title">DINAS KOMUNIKASI DAN INFORMATIKA KOTA BOGOR</div>
-  <div class="footer-subtitle">Pemerintah Daerah Kota Bogor</div>
-  <div class="footer-links">
-    <span>📍 Jl. Ir. H. Juanda No.10, RT.01/RW.01, Pabaton, Kecamatan Bogor Tengah, Kota Bogor, Jawa Barat 16121</span>
-    <span>📞 +62251-8321075</span>
-    <span>✉️ kominfo@kotabogor.go.id</span>
-  </div>
-  <div class="footer-copyright">© Bogor - 2025</div>
-</footer>
+</body>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 
 <script>
   window.CCTV_DATA = {{ cctv_data | tojson }};
@@ -385,181 +640,244 @@
 </script>
 
 <script>
-let volumeChart = null;
-let distributionChart = null;
-let trendChart = null;
+  let volumeChart = null;
+  let distributionChart = null;
+  let trendChart = null;
 
-function initVolumeChart() {
-  const canvas = document.getElementById('volumeChart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  
-  volumeChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Motor', 'Mobil', 'Bus', 'Truk'],
-      datasets: [
-        { label: 'Atas', data: [0, 0, 0, 0], backgroundColor: 'rgba(59, 130, 246, 0.8)', borderColor: 'rgb(59, 130, 246)', borderWidth: 1 },
-        { label: 'Bawah', data: [0, 0, 0, 0], backgroundColor: 'rgba(16, 185, 129, 0.8)', borderColor: 'rgb(16, 185, 129)', borderWidth: 1 }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', font: { size: 11 } } },
-        y: { beginAtZero: true, min: 0, suggestedMax: 100, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', stepSize: 5, font: { size: 11 } }, title: { display: true, text: 'Jumlah', color: '#fff', font: { size: 12 } } }
+  function initVolumeChart() {
+    const canvas = document.getElementById('volumeChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    volumeChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Motor', 'Mobil', 'Bus', 'Truk'],
+        datasets: [
+          {
+            label: 'Atas',
+            data: [0, 0, 0, 0],
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderColor: 'rgb(59, 130, 246)',
+            borderWidth: 1,
+          },
+          {
+            label: 'Bawah',
+            data: [0, 0, 0, 0],
+            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+            borderColor: 'rgb(16, 185, 129)',
+            borderWidth: 1,
+          },
+        ],
       },
-      plugins: { legend: { labels: { color: '#fff', font: { size: 11 } }, position: 'top' } }
-    }
-  });
-}
-
-function initDistributionChart() {
-  const canvas = document.getElementById('distributionChart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  
-  distributionChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Motor', 'Mobil', 'Bus', 'Truk'],
-      datasets: [
-        { label: 'Atas', data: [0, 0, 0, 0], backgroundColor: 'rgba(59, 130, 246, 0.8)', borderColor: 'rgb(59, 130, 246)', borderWidth: 1 },
-        { label: 'Bawah', data: [0, 0, 0, 0], backgroundColor: 'rgba(16, 185, 129, 0.8)', borderColor: 'rgb(16, 185, 129)', borderWidth: 1 }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff' }, title: { display: true, text: 'Jenis Kendaraan', color: '#fff' } },
-        y: { beginAtZero: true, min: 0, suggestedMax: 100, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', stepSize: 10 }, title: { display: true, text: 'Jumlah', color: '#fff' } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', font: { size: 11 } } },
+          y: {
+            beginAtZero: true,
+            min: 0,
+            suggestedMax: 100,
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { color: '#fff', stepSize: 5, font: { size: 11 } },
+            title: { display: true, text: 'Jumlah', color: '#fff', font: { size: 12 } },
+          },
+        },
+        plugins: { legend: { labels: { color: '#fff', font: { size: 11 } }, position: 'top' } },
       },
-      plugins: { legend: { labels: { color: '#fff' } } }
-    }
-  });
-}
+    });
+  }
 
-function initTrendChart() {
-  const canvas = document.getElementById('trendChart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  
-  trendChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
-      datasets: [{ label: 'Total Kendaraan', data: [0, 0, 0, 0, 0, 0, 0], backgroundColor: 'rgba(255, 206, 86, 0.8)', borderColor: 'rgb(255, 206, 86)', borderWidth: 1 }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff' }, title: { display: true, text: 'Waktu', color: '#fff' } },
-        y: { beginAtZero: true, min: 0, suggestedMax: 100, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff', stepSize: 10 }, title: { display: true, text: 'Jumlah', color: '#fff' } }
+  function initDistributionChart() {
+    const canvas = document.getElementById('distributionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    distributionChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Motor', 'Mobil', 'Bus', 'Truk'],
+        datasets: [
+          {
+            label: 'Atas',
+            data: [0, 0, 0, 0],
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderColor: 'rgb(59, 130, 246)',
+            borderWidth: 1,
+          },
+          {
+            label: 'Bawah',
+            data: [0, 0, 0, 0],
+            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+            borderColor: 'rgb(16, 185, 129)',
+            borderWidth: 1,
+          },
+        ],
       },
-      plugins: { legend: { labels: { color: '#fff' } } }
-    }
-  });
-}
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { color: '#fff' },
+            title: { display: true, text: 'Jenis Kendaraan', color: '#fff' },
+          },
+          y: {
+            beginAtZero: true,
+            min: 0,
+            suggestedMax: 100,
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { color: '#fff', stepSize: 10 },
+            title: { display: true, text: 'Jumlah', color: '#fff' },
+          },
+        },
+        plugins: { legend: { labels: { color: '#fff' } } },
+      },
+    });
+  }
 
-function initAnalysisMap() {
-  if (typeof L === 'undefined') return;
-  const map = L.map('map').setView([-6.5950, 106.8166], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
-}
+  function initTrendChart() {
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
-function initSocketListeners() {
-  if (typeof io === 'undefined') return;
-  const socket = io();
+    trendChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+        datasets: [
+          {
+            label: 'Total Kendaraan',
+            data: [0, 0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(255, 206, 86, 0.8)',
+            borderColor: 'rgb(255, 206, 86)',
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { color: '#fff' },
+            title: { display: true, text: 'Waktu', color: '#fff' },
+          },
+          y: {
+            beginAtZero: true,
+            min: 0,
+            suggestedMax: 100,
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { color: '#fff', stepSize: 10 },
+            title: { display: true, text: 'Jumlah', color: '#fff' },
+          },
+        },
+        plugins: { legend: { labels: { color: '#fff' } } },
+      },
+    });
+  }
 
-  socket.on("update_stats_realtime", d => {
-      console.log("DATA MASUK:", d);
-  });
-  
-  socket.on('update_stats_realtime', function(data) {
-    const jauh_motor = data.counts_jauh_motor || 0;
-    const jauh_mobil = data.counts_jauh_mobil || 0;
-    const jauh_bus = data.counts_jauh_bus || 0;
-    const jauh_truck = data.counts_jauh_truck || 0;
-    const dekat_motor = data.counts_dekat_motor || 0;
-    const dekat_mobil = data.counts_dekat_mobil || 0;
-    const dekat_bus = data.counts_dekat_bus || 0;
-    const dekat_truck = data.counts_dekat_truck || 0;
+  function initAnalysisMap() {
+    if (typeof L === 'undefined') return;
+    const map = L.map('map').setView([-6.595, 106.8166], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18,
+    }).addTo(map);
+  }
 
-    document.getElementById('vol-normal-motor').innerText = jauh_motor;
-    document.getElementById('vol-normal-car').innerText = jauh_mobil;
-    document.getElementById('vol-normal-bus').innerText = jauh_bus;
-    document.getElementById('vol-normal-truck').innerText = jauh_truck;
-    document.getElementById('vol-normal-total').innerText = jauh_motor + jauh_mobil + jauh_bus + jauh_truck;
+  function initSocketListeners() {
+    if (typeof io === 'undefined') return;
+    const socket = io();
 
-    document.getElementById('vol-opposite-motor').innerText = dekat_motor;
-    document.getElementById('vol-opposite-car').innerText = dekat_mobil;
-    document.getElementById('vol-opposite-bus').innerText = dekat_bus;
-    document.getElementById('vol-opposite-truck').innerText = dekat_truck;
-    document.getElementById('vol-opposite-total').innerText = dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+    socket.on('update_stats_realtime', (d) => {
+      console.log('DATA MASUK:', d);
+    });
 
-    document.getElementById('vol-grand-motor').innerText = jauh_motor + dekat_motor;
-    document.getElementById('vol-grand-car').innerText = jauh_mobil + dekat_mobil;
-    document.getElementById('vol-grand-bus').innerText = jauh_bus + dekat_bus;
-    document.getElementById('vol-grand-truck').innerText = jauh_truck + dekat_truck;
-    document.getElementById('vol-grand-total').innerText = jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+    socket.on('update_stats_realtime', function (data) {
+      const jauh_motor = data.counts_jauh_motor || 0;
+      const jauh_mobil = data.counts_jauh_mobil || 0;
+      const jauh_bus = data.counts_jauh_bus || 0;
+      const jauh_truck = data.counts_jauh_truck || 0;
+      const dekat_motor = data.counts_dekat_motor || 0;
+      const dekat_mobil = data.counts_dekat_mobil || 0;
+      const dekat_bus = data.counts_dekat_bus || 0;
+      const dekat_truck = data.counts_dekat_truck || 0;
 
-    document.getElementById('table-update-time').innerText = new Date().toLocaleString('id-ID');
-    document.getElementById('speed-update-time').innerText = new Date().toLocaleString('id-ID');
+      document.getElementById('vol-normal-motor').innerText = jauh_motor;
+      document.getElementById('vol-normal-car').innerText = jauh_mobil;
+      document.getElementById('vol-normal-bus').innerText = jauh_bus;
+      document.getElementById('vol-normal-truck').innerText = jauh_truck;
+      document.getElementById('vol-normal-total').innerText = jauh_motor + jauh_mobil + jauh_bus + jauh_truck;
 
-    document.getElementById('donut-motor').innerText = jauh_motor + dekat_motor;
-    document.getElementById('donut-car').innerText = jauh_mobil + dekat_mobil;
-    document.getElementById('donut-bus').innerText = jauh_bus + dekat_bus;
-    document.getElementById('donut-truck').innerText = jauh_truck + dekat_truck;
+      document.getElementById('vol-opposite-motor').innerText = dekat_motor;
+      document.getElementById('vol-opposite-car').innerText = dekat_mobil;
+      document.getElementById('vol-opposite-bus').innerText = dekat_bus;
+      document.getElementById('vol-opposite-truck').innerText = dekat_truck;
+      document.getElementById('vol-opposite-total').innerText = dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
 
-    // === UPDATE KECEPATAN KENDARAAN ===
-    if (data.speed_jauh !== undefined) {
+      document.getElementById('vol-grand-motor').innerText = jauh_motor + dekat_motor;
+      document.getElementById('vol-grand-car').innerText = jauh_mobil + dekat_mobil;
+      document.getElementById('vol-grand-bus').innerText = jauh_bus + dekat_bus;
+      document.getElementById('vol-grand-truck').innerText = jauh_truck + dekat_truck;
+      document.getElementById('vol-grand-total').innerText =
+        jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+
+      document.getElementById('table-update-time').innerText = new Date().toLocaleString('id-ID');
+      document.getElementById('speed-update-time').innerText = new Date().toLocaleString('id-ID');
+
+      document.getElementById('donut-motor').innerText = jauh_motor + dekat_motor;
+      document.getElementById('donut-car').innerText = jauh_mobil + dekat_mobil;
+      document.getElementById('donut-bus').innerText = jauh_bus + dekat_bus;
+      document.getElementById('donut-truck').innerText = jauh_truck + dekat_truck;
+
+      // === UPDATE KECEPATAN KENDARAAN ===
+      if (data.speed_jauh !== undefined) {
         document.getElementById('speed-normal-motor').innerText = data.speed_jauh.toFixed(1);
         document.getElementById('speed-normal-car').innerText = data.speed_jauh.toFixed(1);
         document.getElementById('speed-normal-bus').innerText = data.speed_jauh.toFixed(1);
         document.getElementById('speed-normal-truck').innerText = data.speed_jauh.toFixed(1);
-    }
+      }
 
-    if (data.speed_dekat !== undefined) {
+      if (data.speed_dekat !== undefined) {
         document.getElementById('speed-opposite-motor').innerText = data.speed_dekat.toFixed(1);
         document.getElementById('speed-opposite-car').innerText = data.speed_dekat.toFixed(1);
         document.getElementById('speed-opposite-bus').innerText = data.speed_dekat.toFixed(1);
         document.getElementById('speed-opposite-truck').innerText = data.speed_dekat.toFixed(1);
-    }
+      }
 
-    if (volumeChart) {
-        volumeChart.data.labels = ["Motor", "Mobil", "Bus", "Truk"]; // tetap
+      if (volumeChart) {
+        volumeChart.data.labels = ['Motor', 'Mobil', 'Bus', 'Truk']; // tetap
         volumeChart.data.datasets[0].data = [jauh_motor, jauh_mobil, jauh_bus, jauh_truck];
         volumeChart.data.datasets[1].data = [dekat_motor, dekat_mobil, dekat_bus, dekat_truck];
         volumeChart.update();
-    }
-    if (distributionChart) {
-      distributionChart.data.datasets[0].data = [jauh_motor, jauh_mobil, jauh_bus, jauh_truck];
-      distributionChart.data.datasets[1].data = [dekat_motor, dekat_mobil, dekat_bus, dekat_truck];
-      distributionChart.update();
-    }
-    if (trendChart) {
-      const hourIndex = Math.floor(new Date().getHours() / 4);
-      trendChart.data.datasets[0].data[hourIndex] = jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
-      trendChart.update();
-    }
-  });
-}
+      }
+      if (distributionChart) {
+        distributionChart.data.datasets[0].data = [jauh_motor, jauh_mobil, jauh_bus, jauh_truck];
+        distributionChart.data.datasets[1].data = [dekat_motor, dekat_mobil, dekat_bus, dekat_truck];
+        distributionChart.update();
+      }
+      if (trendChart) {
+        const hourIndex = Math.floor(new Date().getHours() / 4);
+        trendChart.data.datasets[0].data[hourIndex] =
+          jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+        trendChart.update();
+      }
+    });
+  }
 
-window.addEventListener('load', function() {
-  setTimeout(function() {
-    initAnalysisMap();
-    initVolumeChart();
-    initDistributionChart();
-    initTrendChart();
-    initSocketListeners();
-  }, 200);
-});
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      initAnalysisMap();
+      initVolumeChart();
+      initDistributionChart();
+      initTrendChart();
+      initSocketListeners();
+    }, 200);
+  });
 </script>
 
-{% endblock %}
-
-{% block scripts %}
-{% endblock %}
+{% endblock %} {% block scripts %} {% endblock %}
