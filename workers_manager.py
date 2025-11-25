@@ -1,8 +1,8 @@
 import time
 import threading
 from app.models import CCTV
-from analyzer import run_detection_worker
-from app import db
+from analyzer import run_detection_worker  # Mengimpor fungsi worker
+from app import db  # Menggunakan instance db dari aplikasi
 from sqlalchemy import select
 from sqlalchemy.orm import undefer_group  # Import untuk memaksa eager load
 
@@ -14,17 +14,24 @@ WORKER_KILL_SWITCH = {}
 def stop_all_detection_threads():
     global ACTIVE_WORKER_THREADS, WORKER_KILL_SWITCH
 
-    print(f"[WorkerManager] Mengirim sinyal berhenti ke {len(WORKER_KILL_SWITCH)} worker...")
+    num_workers_to_stop = len(WORKER_KILL_SWITCH)
+    print(
+        f"[WorkerManager] Mengirim sinyal berhenti ke {num_workers_to_stop} worker..."
+    )
+
+    # 1. Mengirim sinyal berhenti ke semua worker
     for location, event in WORKER_KILL_SWITCH.items():
-        event.set() # Kirim sinyal berhenti
+        event.set()  # Kirim sinyal berhenti
         print(f"[WorkerManager] Sinyal STOP dikirim ke: {location}")
 
-    # --- PERBAIKAN KRITIS: BERI WAKTU AGAR THREAD LAMA MATI ---
-    # Beri jeda 2-3 detik agar worker lama sempat keluar dari loop dan menjalankan cap.release()
-    time.sleep(3) 
-    print("[WorkerManager] Jeda 3 detik selesai. Membersihkan state...")
-    # --- AKHIR PERBAIKAN KRITIS ---
+    # 2. Memberi waktu agar thread lama mati dan menjalankan cap.release()
+    # Ini sangat KRITIS untuk membebaskan resource video (cap)
+    if num_workers_to_stop > 0:
+        print("[WorkerManager] Menunggu 3 detik agar worker lama mati...")
+        time.sleep(3)
 
+    # 3. Membersihkan state global
+    # Catatan: Walaupun kita join/stop thread, kita tetap bersihkan state global
     ACTIVE_WORKER_THREADS = {}
     WORKER_KILL_SWITCH = {}
     print("[WorkerManager] Semua state worker lama dibersihkan.")
@@ -36,24 +43,23 @@ def initialize_workers_and_server(app):
     dan memulai thread deteksi baru.
     """
 
+    # Hentikan semua thread worker yang sedang berjalan
     stop_all_detection_threads()
 
     # 1. Buat Application Context dan Ambil data CCTV
     active_cctv_list = []
     with app.app_context():
         try:
-            # --- SOLUSI DETACHED INSTANCE ERROR ---
-            # Menggunakan undefer_group('*') untuk memastikan SEMUA kolom dimuat segera
+            # Menggunakan undefer_group('*') untuk memastikan SEMUA kolom dimuat segera (Eager Load)
+            # Ini mencegah 'DetachedInstanceError' saat mengakses data di luar context.
             stmt = (
                 select(CCTV)
                 .filter(CCTV.status.ilike("aktif"), CCTV.stream_url.isnot(None))
                 .options(undefer_group("*"))
-            )  # WAJIB!
+            )
 
             # Gunakan .scalars().all() untuk memuat sepenuhnya sebelum keluar context
             active_cctv_list = db.session.scalars(stmt).all()
-
-            # Tidak perlu db.session.commit() setelah SELECT.
 
         except Exception as e:
             # Rollback wajib jika ada error saat query
@@ -75,9 +81,10 @@ def initialize_workers_and_server(app):
     for cctv in active_cctv_list:
         worker_stop_event = threading.Event()
 
-        # cctv.lokasi diakses di sini, dan sekarang datanya sudah dimuat penuh
+        # cctv.lokasi diakses di sini (di luar context DB), dan datanya sudah dimuat penuh
         WORKER_KILL_SWITCH[cctv.lokasi] = worker_stop_event
 
+        # Memulai worker thread. run_detection_worker adalah fungsi dari analyzer.py
         print(f"[WorkerManager] Memulai worker thread untuk: {cctv.lokasi}")
         t = threading.Thread(
             target=run_detection_worker,
@@ -87,7 +94,7 @@ def initialize_workers_and_server(app):
         t.start()
         threads.append(t)
         ACTIVE_WORKER_THREADS[cctv.lokasi] = t
-        time.sleep(0.5)
+        time.sleep(0.05)  # Jeda kecil untuk mencegah lonjakan CPU saat startup
 
     print(f"[WorkerManager] Berhasil memulai {len(threads)} worker deteksi.")
 

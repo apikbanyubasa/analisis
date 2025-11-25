@@ -139,3 +139,63 @@ class User(db.Model, UserMixin):
         return f"<User {self.username}>"
 
 
+# ===================================================================
+# == MODEL BARU UNTUK DATA ANALYZER (POSTGRESQL)
+# ===================================================================
+
+class CountingData(db.Model):
+    __tablename__ = "counting_data"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+    location = db.Column(db.String(255), nullable=False, index=True)
+    
+    # Data Total Count (Misalnya, total per arah atau per interval waktu)
+    counts_jauh_car = db.Column(db.Integer, default=0)
+    counts_jauh_motorcycle = db.Column(db.Integer, default=0)
+    counts_jauh_bus = db.Column(db.Integer, default=0)
+    counts_jauh_truck = db.Column(db.Integer, default=0)
+    
+    counts_dekat_car = db.Column(db.Integer, default=0)
+    counts_dekat_motorcycle = db.Column(db.Integer, default=0)
+    counts_dekat_bus = db.Column(db.Integer, default=0)
+    counts_dekat_truck = db.Column(db.Integer, default=0)
+    
+    grand_total = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f"<CountingData {self.location}@{self.timestamp}>"
+
+class ParkingViolation(db.Model):
+    __tablename__ = "parking_violations"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+    location = db.Column(db.String(255), nullable=False, index=True)
+    vehicle_type = db.Column(db.String(50), nullable=False)
+    parked_duration_sec = db.Column(db.Float, nullable=False)
+    object_id = db.Column(db.Integer, nullable=False) # ID tracker dari analyzer
+    
+    def __repr__(self):
+        return f"<ParkingViolation {self.vehicle_type}@{self.location}>"
+
+class CrowdDetection(db.Model):
+    __tablename__ = "crowd_detections"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+    location = db.Column(db.String(255), nullable=False, index=True)
+    crowd_size = db.Column(db.Integer, nullable=False)
+    duration_sec = db.Column(db.Float, nullable=False)
+    
+    def __repr__(self):
+        return f"<CrowdDetection {self.crowd_size} people @{self.location}>"
+
+class OdolDetection(db.Model):
+    __tablename__ = "odol_detections"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+    location = db.Column(db.String(255), nullable=False, index=True)
+    vehicle_type = db.Column(db.String(50), nullable=False) # Seharusnya 'bus' atau 'truck'
+    aspect_ratio = db.Column(db.Float, nullable=False)
+    area = db.Column(db.Float, nullable=False)
+    
+    def __repr__(self):
+        return f"<OdolDetection {self.vehicle_type} @{self.location}>"

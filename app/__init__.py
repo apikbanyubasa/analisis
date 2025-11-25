@@ -2,9 +2,17 @@ from flask import Flask, redirect, url_for
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
-from config import Config
 from flask_migrate import Migrate
-from flask_socketio import SocketIO  # <-- Dipertahankan dan Ditambahkan
+from flask_socketio import SocketIO
+from dotenv import load_dotenv  # 💥 BARU
+import os  # 💥 BARU
+
+# --- MUAT VARIABEL LINGKUNGAN DI AWAL MODUL ---
+# Ini mencegah masalah di Flask CLI di mana config.py dibaca sebelum run.py memuat .env
+load_dotenv(override=True)
+# ----------------------------------------------
+
+from config import Config  # Config diimpor SETELAH load_dotenv
 
 # --- 1. INISIALISASI EKSTENSI (GLOBAL) ---
 db = SQLAlchemy()
@@ -15,8 +23,8 @@ login_manager.login_message = "Silakan login untuk mengakses halaman ini."
 login_manager.login_message_category = "info"
 
 # Deklarasi global untuk SocketIO dan Migrate
-socketio = SocketIO(cors_allowed_origins="*")  # <-- Dipertahankan dari Remote
-migrate = Migrate()  # <-- Dipertahankan dari Lokal
+socketio = SocketIO(cors_allowed_origins="*")
+migrate = Migrate()
 
 # JANGAN impor model 'User' di sini.
 
