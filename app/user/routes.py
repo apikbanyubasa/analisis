@@ -94,7 +94,6 @@ def dashboard():
     featured_cctv = CCTV.query.filter(
         CCTV.status.ilike("aktif"),
         CCTV.stream_url.isnot(None),
-        CCTV.stream_url.contains(".m3u8"),
     ).first()
     featured_cctv_idx = featured_cctv.id if featured_cctv else None
     featured_cctv_lokasi = featured_cctv.lokasi if featured_cctv else None
@@ -272,7 +271,6 @@ def kepadatan():
         featured_cctv = CCTV.query.filter(
             CCTV.status.ilike("aktif"),
             CCTV.stream_url.isnot(None),
-            CCTV.stream_url.contains(".m3u8"),
         ).first()
         featured_cctv_idx = featured_cctv.id if featured_cctv else None
         featured_cctv_lokasi = featured_cctv.lokasi if featured_cctv else None
@@ -310,19 +308,15 @@ def get_cctv_info(cctv_id: int):
             "longitude": cctv.longitude,
             "video_url": convert_video_url(cctv.video_url),
             "stream_url": cctv.stream_url,
-            "has_detection_stream": bool(
-                cctv.stream_url and ".m3u8" in cctv.stream_url
-            ),
+            "has_detection_stream": bool(cctv.stream_url),
         }
     )
-
 
 @user_bp.route("/api/cctv/<int:cctv_id>/detection_status")
 def get_detection_status(cctv_id: int):
     cctv = CCTV.query.get_or_404(cctv_id)
     supports_detection = (
         cctv.stream_url
-        and ".m3u8" in cctv.stream_url
         and cctv.status.lower() == "aktif"
     )
     return jsonify(
@@ -380,7 +374,6 @@ def analyze_feed(cctv_id: int):
         "supports_detection": bool(
             cctv.status.lower() == "aktif"
             and cctv.stream_url
-            and ".m3u8" in cctv.stream_url
         ),
     }
     return render_template("user/analyze.html", camera_idx=cctv.id, cctv_info=cctv_info)
@@ -393,7 +386,6 @@ def analyze_stream(cctv_id: int):
         not (
             cctv.status.lower() == "aktif"
             and cctv.stream_url
-            and ".m3u8" in cctv.stream_url
         )
         or not generate_frames
     ):
@@ -434,7 +426,6 @@ def start_scan_api(cctv_id: int):
     if not (
         cctv.status.lower() == "aktif"
         and cctv.stream_url
-        and ".m3u8" in cctv.stream_url
     ):
         return (
             jsonify({"error": "CCTV tidak memiliki stream yang valid untuk deteksi"}),
@@ -469,7 +460,6 @@ def get_system_status():
     capable = CCTV.query.filter(
         CCTV.status.ilike("aktif"),
         CCTV.stream_url.isnot(None),
-        CCTV.stream_url.contains(".m3u8"),
     ).count()
     return jsonify(
         {
