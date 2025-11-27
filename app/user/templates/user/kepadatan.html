@@ -6,6 +6,7 @@
 <link href="{{ url_for('static', filename='dist/output.css') }}" rel="stylesheet" />
 
 <style>
+  /* ... (Style CSS Anda sebelumnya) ... */
   #app,
   #root,
   [x-data],
@@ -317,11 +318,34 @@
     width: 100%;
     height: 100%;
   }
+  /* Style untuk Search Results */
+  #cctv-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #141b35;
+    border: 1px solid #374151;
+    border-radius: 0 0 8px 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  }
+  .search-item {
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #374151;
+    color: #e5e7eb;
+    transition: background 0.2s;
+  }
+  .search-item:hover {
+    background: #2d3561;
+  }
 </style>
 {% endblock %} {% block content %}
 
 <body class="h-screen bg-[#0e1222]">
-  <!-- HEADER FIXED -->
   <div class="fixed top-0 left-0 w-full z-50 bg-[#0E1222] shadow">
     <header class="flex justify-between items-center p-4">
       <div class="flex items-center space-x-2">
@@ -342,7 +366,6 @@
     </header>
   </div>
 
-  <!-- MAIN CONTENT - Centered dengan max-width -->
   <div class="pt-28 pb-6 main-container max-w-[1500px] mx-auto space-y-6">
     <div class="bg-[#141B35] p-4 rounded-xl shadow-lg">
       <div class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
@@ -359,8 +382,22 @@
           <circle cx="12" cy="10" r="3" />
         </svg>
         Titik Lokasi CCTV:
-        <span class="text-yellow-400 font-bold">{{ featured_cctv_lokasi or "Pilih CCTV" }}</span>
+        <span class="text-yellow-400 font-bold" id="map-location-title"
+          >{{ featured_cctv_lokasi or "Pilih CCTV" }}</span
+        >
       </div>
+
+      <div class="relative mb-3">
+        <input
+          type="text"
+          id="cctv-search-input"
+          placeholder="Cari lokasi CCTV di peta..."
+          oninput="searchCCTV(this.value)"
+          class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-yellow-400 focus:outline-none text-sm"
+        />
+        <div id="cctv-search-results" style="display: none"></div>
+      </div>
+
       <div class="map-section rounded-lg">
         <div id="map"></div>
       </div>
@@ -425,7 +462,7 @@
         >
           <path d="M17 20a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h12c1.1 0 2 .9 2 2v16z" />
           <path d="M17 12H7" />
-          <path d="M10 16l-3-3 3-3" />
+          <path d="M10 16l-3-3-3-3" />
           <path d="M22 17l-5-5-5 5" />
         </svg>
         Volume Kendaraan (kend./menit)
@@ -637,14 +674,91 @@
 <script>
   window.CCTV_DATA = {{ cctv_data | tojson }};
   window.FEATURED_CCTV_IDX = {{ featured_cctv_idx or 'null' }};
-</script>
 
-<script>
+  const TREND_CHART_ACCUMULATOR_KEY = 'trendChartAccumulator';
+  let analysisMap = null;
+  let markers = [];
+  let currentActiveCCTVId = window.FEATURED_CCTV_IDX;
+  let currentActiveCCTVLokasi = "{{ featured_cctv_lokasi or 'Pilih CCTV' }}";
+
+
+  function getTrendAccumulator() {
+    try {
+      const storedData = sessionStorage.getItem(TREND_CHART_ACCUMULATOR_KEY);
+      if (storedData) {
+        return JSON.parse(storedData);
+      }
+    } catch (e) {
+      console.error("Failed to load trend chart accumulator from storage:", e);
+    }
+    return [0, 0, 0, 0, 0, 0, 0];
+  }
+
+  function saveTrendAccumulator(data) {
+    try {
+      sessionStorage.setItem(TREND_CHART_ACCUMULATOR_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.error("Failed to save trend chart accumulator to storage:", e);
+    }
+  }
+
+  // 💡 Fungsi utama untuk mengganti CCTV yang di-scan dan di-display
+  function loadCCTV(cctvId, lokasi, initialLoad = false) {
+    if (cctvId === null) return;
+    if (cctvId === currentActiveCCTVId && !initialLoad) {
+        console.log("CCTV ID sama, tidak perlu reload.");
+        return;
+    }
+
+    currentActiveCCTVId = cctvId;
+    currentActiveCCTVLokasi = lokasi;
+
+    // 1. Perbarui Label Lokasi di Dashboard
+    document.getElementById('current-location').innerText = lokasi;
+    document.getElementById('map-location-title').innerText = lokasi; // Perbarui judul peta
+
+    // 2. Perbarui Stream Video Deteksi (PENTING: Gunakan cctv_id)
+    const streamImg = document.getElementById('detection-stream');
+    if (streamImg) {
+        // Hapus cache dengan menambahkan timestamp untuk memaksa reload stream baru
+        const newSrc = `/user/analyze_stream/${cctvId}?t=${new Date().getTime()}`;
+        streamImg.src = newSrc;
+    }
+
+    // 3. Reset Session Storage untuk Trend Chart (PENTING!)
+    // Reset akumulator karena kita beralih ke CCTV baru
+    sessionStorage.removeItem(TREND_CHART_ACCUMULATOR_KEY);
+
+    // Reset visual chart
+    if (trendChart) {
+        trendChart.data.datasets[0].data = Array(7).fill(0);
+        trendChart.options.scales.y.suggestedMax = 100;
+        trendChart.update();
+    }
+
+    // Reset visual chart volume dan distribusi
+    if (volumeChart) {
+        volumeChart.data.datasets[0].data = Array(4).fill(0);
+        volumeChart.data.datasets[1].data = Array(4).fill(0);
+        volumeChart.update();
+    }
+
+    // Reset data tabel
+    document.getElementById('vol-grand-total').innerText = 0;
+
+    // 4. Update Marker Icon di Peta (pindahkan view ke marker yang dipilih)
+    const targetCCTV = window.CCTV_DATA.find(c => c.id === cctvId);
+    if (analysisMap && targetCCTV) {
+        analysisMap.setView([targetCCTV.latitude, targetCctv.longitude], 15);
+    }
+  }
+
   let volumeChart = null;
   let distributionChart = null;
   let trendChart = null;
 
   function initVolumeChart() {
+    // ... (Kode initVolumeChart sama) ...
     const canvas = document.getElementById('volumeChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -690,6 +804,7 @@
   }
 
   function initDistributionChart() {
+    // ... (Kode initDistributionChart sama) ...
     const canvas = document.getElementById('distributionChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -739,9 +854,13 @@
   }
 
   function initTrendChart() {
+    // ... (Kode initTrendChart sama) ...
     const canvas = document.getElementById('trendChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+
+    // Ambil data akumulator dari session storage
+    const initialData = getTrendAccumulator();
 
     trendChart = new Chart(ctx, {
       type: 'bar',
@@ -750,7 +869,7 @@
         datasets: [
           {
             label: 'Total Kendaraan',
-            data: [0, 0, 0, 0, 0, 0, 0],
+            data: initialData, // Gunakan data akumulator
             backgroundColor: 'rgba(255, 206, 86, 0.8)',
             borderColor: 'rgb(255, 206, 86)',
             borderWidth: 1,
@@ -769,7 +888,7 @@
           y: {
             beginAtZero: true,
             min: 0,
-            suggestedMax: 100,
+            suggestedMax: Math.max(100, Math.max(...initialData) * 1.2), // Adjust suggestedMax dynamically
             grid: { color: 'rgba(255,255,255,0.1)' },
             ticks: { color: '#fff', stepSize: 10 },
             title: { display: true, text: 'Jumlah', color: '#fff' },
@@ -782,22 +901,70 @@
 
   function initAnalysisMap() {
     if (typeof L === 'undefined') return;
-    const map = L.map('map').setView([-6.595, 106.8166], 13);
+    const cctvData = window.CCTV_DATA;
+
+    // Cari featured CCTV (yang aktif)
+    const featuredCctv = cctvData.find(c => c.id === window.FEATURED_CCTV_IDX);
+
+    let defaultLat = -6.595;
+    let defaultLng = 106.8166;
+
+    if (featuredCctv && featuredCctv.latitude && featuredCctv.longitude) {
+        defaultLat = featuredCctv.latitude;
+        defaultLng = featuredCctv.longitude;
+    }
+
+    analysisMap = L.map('map').setView([defaultLat, defaultLng], 13);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
       maxZoom: 18,
-    }).addTo(map);
+    }).addTo(analysisMap);
+
+    // Tambahkan marker untuk setiap CCTV
+    cctvData.forEach(cctv => {
+        // Hanya tambahkan marker jika memiliki koordinat dan stream URL (aktif)
+        if (cctv.latitude && cctv.longitude && cctv.stream_url) {
+
+            // 💡 Konten Popup dengan Tombol "Scan"
+            const popupContent = `
+                <div style="font-family: sans-serif;">
+                    <h4 style="margin: 0 0 5px 0;"><b>CCTV ${cctv.lokasi}</b></h4>
+                    <p style="margin-bottom: 10px; font-size: 13px;">Status:
+                        <span style="color: ${cctv.status === 'Aktif' ? 'green' : 'red'}; font-weight: bold;">${cctv.status}</span>
+                    </p>
+                    <button
+                        onclick="loadCCTV(${cctv.id}, '${cctv.lokasi}')"
+                        style="background-color: #facc15; color: #141B35; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%;">
+                        SCAN LOKASI INI
+                    </button>
+                </div>
+            `;
+
+            const marker = L.marker([cctv.latitude, cctv.longitude], {
+                cctvId: cctv.id, // Simpan ID di options
+            }).addTo(analysisMap)
+            .bindPopup(popupContent); // Pasang konten popup
+
+            markers.push(marker);
+        }
+    });
   }
 
   function initSocketListeners() {
+    // ... (Kode initSocketListeners sama) ...
     if (typeof io === 'undefined') return;
     const socket = io();
 
-    socket.on('update_stats_realtime', (d) => {
-      console.log('DATA MASUK:', d);
-    });
+    let lastWorkerTotal = 0;
+    let trendAccumulator = getTrendAccumulator();
 
     socket.on('update_stats_realtime', function (data) {
+      // 💡 PENTING: FILTER DATA SocketIO hanya untuk CCTV yang sedang aktif
+      if (data.location !== currentActiveCCTVLokasi) {
+          return;
+      }
+
       const jauh_motor = data.counts_jauh_motor || 0;
       const jauh_mobil = data.counts_jauh_mobil || 0;
       const jauh_bus = data.counts_jauh_bus || 0;
@@ -807,6 +974,9 @@
       const dekat_bus = data.counts_dekat_bus || 0;
       const dekat_truck = data.counts_dekat_truck || 0;
 
+      const currentWorkerTotal = jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+
+      // 1. UPDATE TABEL DAN DONUT CHART (Data live dari worker)
       document.getElementById('vol-normal-motor').innerText = jauh_motor;
       document.getElementById('vol-normal-car').innerText = jauh_mobil;
       document.getElementById('vol-normal-bus').innerText = jauh_bus;
@@ -819,20 +989,25 @@
       document.getElementById('vol-opposite-truck').innerText = dekat_truck;
       document.getElementById('vol-opposite-total').innerText = dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
 
-      document.getElementById('vol-grand-motor').innerText = jauh_motor + dekat_motor;
-      document.getElementById('vol-grand-car').innerText = jauh_mobil + dekat_mobil;
-      document.getElementById('vol-grand-bus').innerText = jauh_bus + dekat_bus;
-      document.getElementById('vol-grand-truck').innerText = jauh_truck + dekat_truck;
-      document.getElementById('vol-grand-total').innerText =
-        jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
+      const grandMotor = jauh_motor + dekat_motor;
+      const grandCar = jauh_mobil + dekat_mobil;
+      const grandBus = jauh_bus + dekat_bus;
+      const grandTruck = jauh_truck + dekat_truck;
+      const grandTotal = currentWorkerTotal;
+
+      document.getElementById('vol-grand-motor').innerText = grandMotor;
+      document.getElementById('vol-grand-car').innerText = grandCar;
+      document.getElementById('vol-grand-bus').innerText = grandBus;
+      document.getElementById('vol-grand-truck').innerText = grandTruck;
+      document.getElementById('vol-grand-total').innerText = grandTotal;
 
       document.getElementById('table-update-time').innerText = new Date().toLocaleString('id-ID');
       document.getElementById('speed-update-time').innerText = new Date().toLocaleString('id-ID');
 
-      document.getElementById('donut-motor').innerText = jauh_motor + dekat_motor;
-      document.getElementById('donut-car').innerText = jauh_mobil + dekat_mobil;
-      document.getElementById('donut-bus').innerText = jauh_bus + dekat_bus;
-      document.getElementById('donut-truck').innerText = jauh_truck + dekat_truck;
+      document.getElementById('donut-motor').innerText = grandMotor;
+      document.getElementById('donut-car').innerText = grandCar;
+      document.getElementById('donut-bus').innerText = grandBus;
+      document.getElementById('donut-truck').innerText = grandTruck;
 
       // === UPDATE KECEPATAN KENDARAAN ===
       if (data.speed_jauh !== undefined) {
@@ -849,25 +1024,104 @@
         document.getElementById('speed-opposite-truck').innerText = data.speed_dekat.toFixed(1);
       }
 
+      // 2. UPDATE CHART VOLUME (Real-time volume)
       if (volumeChart) {
-        volumeChart.data.labels = ['Motor', 'Mobil', 'Bus', 'Truk']; // tetap
+        volumeChart.data.labels = ['Motor', 'Mobil', 'Bus', 'Truk'];
         volumeChart.data.datasets[0].data = [jauh_motor, jauh_mobil, jauh_bus, jauh_truck];
         volumeChart.data.datasets[1].data = [dekat_motor, dekat_mobil, dekat_bus, dekat_truck];
         volumeChart.update();
       }
+
+      // 3. UPDATE CHART DISTRIBUSI (Live distribution)
       if (distributionChart) {
         distributionChart.data.datasets[0].data = [jauh_motor, jauh_mobil, jauh_bus, jauh_truck];
         distributionChart.data.datasets[1].data = [dekat_motor, dekat_mobil, dekat_bus, dekat_truck];
         distributionChart.update();
       }
+
+      // 4. UPDATE CHART TREN (Akumulatif per jam di sesi browser)
       if (trendChart) {
-        const hourIndex = Math.floor(new Date().getHours() / 4);
-        trendChart.data.datasets[0].data[hourIndex] =
-          jauh_motor + jauh_mobil + jauh_bus + jauh_truck + dekat_motor + dekat_mobil + dekat_bus + dekat_truck;
-        trendChart.update();
+        const currentHour = new Date().getHours();
+        const hourIndex = Math.floor(currentHour / 4);
+
+        if (currentWorkerTotal > lastWorkerTotal) {
+            const delta = currentWorkerTotal - lastWorkerTotal;
+            trendAccumulator[hourIndex] += delta;
+
+            trendChart.data.datasets[0].data = [...trendAccumulator];
+            const maxVal = Math.max(...trendAccumulator);
+            trendChart.options.scales.y.suggestedMax = Math.max(100, maxVal * 1.2);
+
+            trendChart.update();
+            saveTrendAccumulator(trendAccumulator);
+        } else if (currentWorkerTotal < lastWorkerTotal) {
+             console.warn(`Worker total reset detected. Total anjlok dari ${lastWorkerTotal} ke ${currentWorkerTotal}. Mereset FE accumulator.`);
+             trendAccumulator = getTrendAccumulator();
+
+             trendChart.data.datasets[0].data = [...trendAccumulator];
+             trendChart.update();
+        }
+        lastWorkerTotal = currentWorkerTotal;
       }
     });
   }
+
+  // 💡 Logika Search CCTV
+  let searchTimeout;
+  const searchResultsDiv = document.getElementById('cctv-search-results');
+  const cctvData = window.CCTV_DATA;
+
+  function searchCCTV(query) {
+      clearTimeout(searchTimeout);
+      const q = query.trim().toLowerCase();
+
+      if (q.length < 3) {
+          searchResultsDiv.innerHTML = '';
+          searchResultsDiv.style.display = 'none';
+          return;
+      }
+
+      searchTimeout = setTimeout(() => {
+          const filtered = cctvData.filter(c =>
+              c.lokasi.toLowerCase().includes(q) && c.stream_url // Hanya yang memiliki stream
+          );
+
+          if (filtered.length === 0) {
+              searchResultsDiv.innerHTML = '<div class="search-item text-gray-400">Tidak ditemukan.</div>';
+          } else {
+              let resultsHtml = '';
+              filtered.forEach(c => {
+                  resultsHtml += `<div class="search-item" onclick="selectSearchItem(${c.id}, '${c.lokasi}', ${c.latitude}, ${c.longitude})">
+                                      ${c.lokasi}
+                                  </div>`;
+              });
+              searchResultsDiv.innerHTML = resultsHtml;
+          }
+          searchResultsDiv.style.display = 'block';
+      }, 300);
+  }
+
+  // 💡 FUNGSI INI DIUBAH TOTAL UNTUK HANYA MENAMPILkan POPUP dan MEMINDAHKAN PETA
+  function selectSearchItem(cctvId, lokasi, lat, lng) {
+
+      // 1. Pindahkan peta ke lokasi yang dipilih dan zoom in
+      if (analysisMap) {
+          analysisMap.setView([lat, lng], 15);
+      }
+
+      // 2. Cari marker yang sesuai dan buka popup-nya
+      const selectedMarker = markers.find(m => m.options.cctvId === cctvId);
+
+      if (selectedMarker) {
+          selectedMarker.openPopup();
+      }
+
+      // 3. Bersihkan search bar dan tutup hasil
+      document.getElementById('cctv-search-input').value = lokasi;
+      searchResultsDiv.innerHTML = '';
+      searchResultsDiv.style.display = 'none';
+  }
+
 
   window.addEventListener('load', function () {
     setTimeout(function () {
@@ -876,7 +1130,23 @@
       initDistributionChart();
       initTrendChart();
       initSocketListeners();
+
+      // Load CCTV pertama kali secara eksplisit
+      if (window.FEATURED_CCTV_IDX !== null) {
+          const featured = window.CCTV_DATA.find(c => c.id === window.FEATURED_CCTV_IDX);
+          if (featured) {
+              loadCCTV(featured.id, featured.lokasi, true);
+          }
+      }
     }, 200);
+
+    // Tutup hasil search ketika klik di luar
+    document.addEventListener('click', (e) => {
+        if (!document.getElementById('cctv-search-input').contains(e.target) &&
+            !searchResultsDiv.contains(e.target)) {
+            searchResultsDiv.style.display = 'none';
+        }
+    });
   });
 </script>
 

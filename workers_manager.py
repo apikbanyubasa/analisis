@@ -19,19 +19,37 @@ def stop_all_detection_threads():
         f"[WorkerManager] Mengirim sinyal berhenti ke {num_workers_to_stop} worker..."
     )
 
+    # Simpan daftar thread yang akan di-join
+    threads_to_join = []
+
     # 1. Mengirim sinyal berhenti ke semua worker
     for location, event in WORKER_KILL_SWITCH.items():
         event.set()  # Kirim sinyal berhenti
         print(f"[WorkerManager] Sinyal STOP dikirim ke: {location}")
 
-    # 2. Memberi waktu agar thread lama mati dan menjalankan cap.release()
-    # Ini sangat KRITIS untuk membebaskan resource video (cap)
-    if num_workers_to_stop > 0:
-        print("[WorkerManager] Menunggu 3 detik agar worker lama mati...")
-        time.sleep(3)
+    # 2. Kumpulkan objek Thread aktif sebelum membersihkan state
+    # (Menggunakan list(ACTIVE_WORKER_THREADS.items()) untuk menghindari modifikasi saat iterasi)
+    for location, thread in list(ACTIVE_WORKER_THREADS.items()):
+        if thread.is_alive():
+            threads_to_join.append(thread)
 
-    # 3. Membersihkan state global
-    # Catatan: Walaupun kita join/stop thread, kita tetap bersihkan state global
+    # 3. Memberi waktu agar thread lama mati dan menjalankan cap.release()
+    # 💡 PERBAIKAN: Gunakan join() untuk menunggu thread selesai secara eksplisit.
+    if threads_to_join:
+        print(
+            f"[WorkerManager] Menunggu {len(threads_to_join)} worker menyelesaikan tugas..."
+        )
+
+        # Atur timeout 3 detik per thread
+        for thread in threads_to_join:
+            # Join dengan timeout; jika thread tidak selesai dalam 3 detik, kita lanjutkan
+            thread.join(timeout=3)
+            if thread.is_alive():
+                print(
+                    f"[WorkerManager] PERINGATAN: Thread {thread.name} gagal dihentikan dalam 3 detik."
+                )
+
+    # 4. Membersihkan state global (dilakukan setelah thread di-join)
     ACTIVE_WORKER_THREADS = {}
     WORKER_KILL_SWITCH = {}
     print("[WorkerManager] Semua state worker lama dibersihkan.")

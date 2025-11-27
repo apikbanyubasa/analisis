@@ -8,7 +8,15 @@ import sqlite3
 from collections import defaultdict, deque
 import math
 from datetime import datetime, timedelta
-from analyzer import generate_frames, LATEST_DETECTION_STATS, LOCATION_TRACKERS
+
+# 💡 PERBAIKAN: Ganti TRACKED dengan GLOBAL_TRACKED_OBJECTS, dan impor fungsi reset
+from analyzer import (
+    generate_frames,
+    LATEST_DETECTION_STATS,
+    LOCATION_TRACKERS,
+    reset_location_data,
+    GLOBAL_TRACKED_OBJECTS,  # Variabel global baru untuk data kecepatan per lokasi
+)
 from flask import (
     Blueprint,
     render_template,
@@ -31,6 +39,10 @@ from ..models import (
     BatasWilayah,
     Kontak,
     Dispatch,
+    ParkingViolation,  
+    OdolDetection,     
+    CrowdDetection,    
+    CountingData,
 )
 from .forms import (
     LoginForm,
@@ -111,6 +123,42 @@ def logout():
     logout_user()
     flash("Anda telah berhasil logout.", "success")
     return redirect(url_for("admin.login"))
+
+
+@admin_bp.route("/api/cctv/reset/<int:cctv_id>", methods=["POST"])
+@login_required
+@operator_or_admin_required
+def reset_cctv_data(cctv_id: int):
+    """
+    Memanggil fungsi reset_location_data di analyzer.py
+    untuk menghapus data tracker di memori dan historis di database.
+    """
+    cctv = CCTV.query.get_or_404(cctv_id)
+    location_name = cctv.lokasi
+
+    try:
+        # Panggil fungsi reset dari analyzer.py (sudah diperbaiki untuk menghapus memori & DB)
+        reset_location_data(location_name)
+
+        # Memicu reload thread workers untuk memastikan worker lama (jika masih aktif) terhenti
+        reload_workers_thread(current_app._get_current_object())
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": f"Data tracker dan historis untuk {location_name} berhasil direset.",
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        print(f"ERROR RESET DATA ADMIN: {e}")
+        return (
+            jsonify({"success": False, "message": f"Gagal mereset data: {str(e)}"}),
+            500,
+        )
 
 
 @admin_bp.route("/users")
@@ -569,6 +617,10 @@ def delete_cctv(cctv_id):
         del LATEST_DETECTION_STATS[location_name]
     if location_name in LOCATION_TRACKERS:
         del LOCATION_TRACKERS[location_name]
+    if (
+        location_name in GLOBAL_TRACKED_OBJECTS
+    ):  # 💡 Tambahkan penghapusan data kecepatan
+        del GLOBAL_TRACKED_OBJECTS[location_name]
     # --- AKHIR PENGHAPUSAN KRITIS ---
 
     # 2. Memicu reload (Mematikan thread worker lama secara paksa)
@@ -595,6 +647,10 @@ def delete_all_cctv():
                 del LATEST_DETECTION_STATS[location_name]
             if location_name in LOCATION_TRACKERS:
                 del LOCATION_TRACKERS[location_name]
+            if (
+                location_name in GLOBAL_TRACKED_OBJECTS
+            ):  # 💡 Tambahkan penghapusan data kecepatan
+                del GLOBAL_TRACKED_OBJECTS[location_name]
 
         # 3. Hapus dari database (Langkah terakhir)
         CCTV.query.delete()
@@ -762,6 +818,13 @@ def upload_csv():
                 cctv_entry.camera_type = row.get("camera_type")
                 cctv_entry.stream_url = row.get("stream_url")
                 cctv_entry.type = row.get("type")
+                # 💡 Tambahkan data konfigurasi garis jika ada di CSV
+                cctv_entry.line1_y = pd.to_numeric(row.get("line1_y"), errors="coerce")
+                cctv_entry.line2_y = pd.to_numeric(row.get("line2_y"), errors="coerce")
+                cctv_entry.real_distance_m = pd.to_numeric(
+                    row.get("real_distance_m"), errors="coerce"
+                )
+
             db.session.commit()
             reload_workers_thread(current_app._get_current_object())
             flash(
@@ -789,6 +852,10 @@ def get_cctv_dataframe():
             "CAMERA_TYPE": c.camera_type,
             "STREAM_URL": c.stream_url,
             "TYPE": c.type,
+            # 💡 Tambahkan kolom konfigurasi agar bisa diunduh
+            "LINE1_Y": getattr(c, "line1_y", None),
+            "LINE2_Y": getattr(c, "line2_y", None),
+            "REAL_DISTANCE_M": getattr(c, "real_distance_m", None),
         }
         for c in query
     ]
@@ -1095,81 +1162,6 @@ def get_crowd_stats(camera_id: int):  # <-- Ganti ke camera_id
                 "timestamp": 0,
             }
         )
-
-
-# Catatan: Pastikan Anda menghapus load_cctv_from_csv() sepenuhnya atau
-# komentar DEBUG yang mencarinya. Jika fungsi tersebut masih dipanggil di
-# tempat lain, Anda harus memperbaikinya juga.
-
-
-@admin_bp.route("/api/parking_violations")
-@login_required
-def get_parking_violations():
-    try:
-        conn = sqlite3.connect("traffic_counting.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT timestamp, location, vehicle_type, parked_duration_sec, object_id
-            FROM parking_violations
-            WHERE datetime(timestamp) >= datetime('now', '-1 hour')
-            ORDER BY timestamp DESC
-            LIMIT 20
-        """
-        )
-        rows = cursor.fetchall()
-        conn.close()
-
-        return jsonify(
-            [
-                {
-                    "timestamp": r[0],
-                    "location": r[1],
-                    "vehicle_type": r[2],
-                    "parked_duration_sec": r[3],
-                    "object_id": r[4],
-                }
-                for r in rows
-            ]
-        )
-    except Exception as e:
-        print(f"Error parking violations: {e}")
-        return jsonify([])
-
-
-@admin_bp.route("/api/odol_detections")
-@login_required
-def get_odol_detections():
-    try:
-        conn = sqlite3.connect("traffic_counting.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT timestamp, location, vehicle_type, aspect_ratio, area
-            FROM odol_detections
-            WHERE datetime(timestamp) >= datetime('now', '-1 hour')
-            ORDER BY timestamp DESC
-            LIMIT 20
-        """
-        )
-        rows = cursor.fetchall()
-        conn.close()
-
-        return jsonify(
-            [
-                {
-                    "timestamp": r[0],
-                    "location": r[1],
-                    "vehicle_type": r[2],
-                    "aspect_ratio": r[3],
-                    "area": r[4],
-                }
-                for r in rows
-            ]
-        )
-    except Exception as e:
-        print(f"Error ODOL detections: {e}")
-        return jsonify([])
 
 
 def get_camera_by_id(camera_id):

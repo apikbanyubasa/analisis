@@ -9,13 +9,20 @@ from collections import defaultdict, deque
 import math
 
 # --- Impor dari Flask dan Model untuk akses DB terpusat ---
-# Kita HANYA mengimpor create_app, db, dan Models, tidak perlu Flask/current_app
 from app import create_app, db
-from app.models import CountingData, ParkingViolation, CrowdDetection, OdolDetection
+
+# 💡 Tambahkan CCTV ke import untuk konfigurasi dinamis
+from app.models import (
+    CountingData,
+    ParkingViolation,
+    CrowdDetection,
+    OdolDetection,
+    CCTV,
+)
 from flask import (
     Flask,
     current_app,
-)  # Dipertahankan untuk type hint dalam get_flask_app_context
+)
 
 # --- Impor SocketIO dari Server ---
 try:
@@ -96,29 +103,26 @@ COLORS = {
     "odol": (0, 255, 255),
 }
 
-# --- GARIS KOORDINAT ---
-LINE_1_COORDS = ((0, 198), (600, 198))
-LINE_2_COORDS = ((0, 244), (600, 244))
+# --- GARIS KOORDINAT DEFAULT (FALLBACK JEMBATAN MERAH) ---
+DEFAULT_LINE_1_Y = 198
+DEFAULT_LINE_2_Y = 244
+DEFAULT_REAL_DISTANCE = 3.5
+
+# Variabel global untuk zona (tetap)
 ZONE_JAUH = 1
 ZONE_TENGAH = 2
 ZONE_DEKAT = 3
 
-
-# --- KECEPATAN SEDERHANA BERDASARKAN 2 GARIS (DARI REMOTE) ---
-TRACKED = {}  # id -> { "last_y": ?, "timestamp": ?, "speed": ? }
-PIXEL_DISTANCE = abs(LINE_2_COORDS[0][1] - LINE_1_COORDS[0][1])
-DISTANCE_BETWEEN_LINES_METERS = 3.5
+# 💡 VAR BARU: Global untuk menyimpan data kecepatan per lokasi (Fix Race Condition)
+GLOBAL_TRACKED_OBJECTS = {}
+LOCATION_TRACKERS = {}
+LATEST_DETECTION_STATS = {}
 
 
 def get_point_side(point_x, point_y, line_x1, line_y1, line_x2, line_y2):
     return (point_x - line_x1) * (line_y2 - line_y1) - (point_y - line_y1) * (
         line_x2 - line_x1
     )
-
-
-# Variabel Global untuk berbagi data antar thread
-LOCATION_TRACKERS = {}
-LATEST_DETECTION_STATS = {}
 
 
 class SimpleObjectTracker:
@@ -145,12 +149,9 @@ class SimpleObjectTracker:
         self.speed_history = defaultdict(lambda: deque(maxlen=5))
 
         # --- Bagian yang berkonflik di __init__ ---
-        # Mengambil kode lokal (yang menggunakan perspective matrix untuk speed)
-        # Tapi karena kode speed di bawahnya diganti, bagian ini jadi DEPRECATED seperti di remote
         src_pts = np.array(
             [[370, 253], [463, 251], [480, 350], [373, 350]], dtype=np.float32
         )
-        # DEPRECATED — tidak dipakai lagi untuk speed
         self.perspective_matrix = None
         self.ppm_birdseye = None
         # --- Akhir bagian konflik di __init__ ---
@@ -213,12 +214,22 @@ class SimpleObjectTracker:
         ]:
             d.pop(object_id, None)
 
-    def update(self, detections):
+    # 💡 PERBAIKAN: Terima config dan local_speed_data (pengganti TRACKED global)
+    def update(self, detections, config, local_speed_data):
+        # Dapatkan konfigurasi garis & jarak dari dictionary config
+        line1_y = config["line1_y"]
+        line2_y = config["line2_y"]
+        pixel_distance = config["pixel_distance"]
+        real_distance_m = config["real_distance_m"]
+
         if len(detections) == 0:
             for object_id in list(self.disappeared.keys()):
                 self.disappeared[object_id] += 1
                 if self.disappeared[object_id] > self.max_disappeared:
                     self.deregister(object_id)
+                    local_speed_data.pop(
+                        object_id, None
+                    )  # 💡 Hapus dari data kecepatan lokal
             return self.objects
 
         if len(self.objects) == 0:
@@ -246,20 +257,16 @@ class SimpleObjectTracker:
                     self.objects[min_object_id]["bbox"] = detection["bbox"]
                     self.objects[min_object_id]["confidence"] = detection["confidence"]
                     self.disappeared[min_object_id] = 0
-                    # transformed_center = self.transform_point(detection["center"])
-                    # self.history[min_object_id].append(transformed_center)
 
                     obj_id = min_object_id
                     center_x, center_y = self.objects[obj_id]["center"]
                     class_name = self.objects[obj_id]["class_name"]
 
-                    # --- Penambahan dari Remote: History dan Zona ---
                     self.history[obj_id].append((center_x, center_y, time.time()))
-                    # Tentukan zona SEKARANG
-                    # --- Akhir Penambahan dari Remote ---
 
-                    (l1_x1, l1_y1), (l1_x2, l1_y2) = LINE_1_COORDS
-                    (l2_x1, l2_y1), (l2_x2, l2_y2) = LINE_2_COORDS
+                    # 💡 LOGIKA ZONA MENGGUNAKAN CONFIG DINAMIS
+                    l1_x1, l1_y1, l1_x2, l1_y2 = 0, line1_y, 600, line1_y
+                    l2_x1, l2_y1, l2_x2, l2_y2 = 0, line2_y, 600, line2_y
 
                     side_1 = get_point_side(
                         center_x, center_y, l1_x1, l1_y1, l1_x2, l1_y2
@@ -303,15 +310,15 @@ class SimpleObjectTracker:
                         elif previous_zone == 0:
                             self.object_zone[obj_id] = current_zone
 
-                    # --- KECEPATAN: Simpan posisi y & waktu (DARI REMOTE) ---
+                    # --- KECEPATAN: Gunakan local_speed_data (HINDARI RACE CONDITION) ---
                     obj_id = min_object_id
                     center_y = self.objects[obj_id]["center"][1]
 
                     if class_name in ["car", "motorcycle", "bus", "truck"]:
 
-                        # Jika BELUM ada di TRACKED → buat entry awal
-                        if obj_id not in TRACKED:
-                            TRACKED[obj_id] = {
+                        # 💡 Gunakan local_speed_data
+                        if obj_id not in local_speed_data:
+                            local_speed_data[obj_id] = {
                                 "cx": center_x,
                                 "cy": center_y,
                                 "last_y": center_y,
@@ -320,24 +327,26 @@ class SimpleObjectTracker:
                             }
 
                         else:
-                            # Jika SUDAH ada → hitung kecepatan
-                            dy = abs(center_y - TRACKED[obj_id]["last_y"])
+                            # 💡 Gunakan local_speed_data
+                            dy = abs(center_y - local_speed_data[obj_id]["last_y"])
 
-                            if dy > 5:  # harus bergerak cukup jauh
-                                dt = time.time() - TRACKED[obj_id]["timestamp"]
+                            if dy > 5:
+                                dt = time.time() - local_speed_data[obj_id]["timestamp"]
 
-                                if dt > 0:
+                                if (
+                                    dt > 0 and pixel_distance > 0
+                                ):  # 💡 Gunakan pixel_distance dinamis
                                     dist_meters = (
-                                        dy / PIXEL_DISTANCE
-                                    ) * DISTANCE_BETWEEN_LINES_METERS
+                                        dy / pixel_distance
+                                    ) * real_distance_m  # 💡 Gunakan real_distance_m dinamis
                                     speed_kmh = (dist_meters / dt) * 3.6
-                                    TRACKED[obj_id]["speed"] = speed_kmh
+                                    local_speed_data[obj_id]["speed"] = speed_kmh
 
                                 # update posisi terakhir
-                                TRACKED[obj_id]["cx"] = center_x
-                                TRACKED[obj_id]["cy"] = center_y
-                                TRACKED[obj_id]["last_y"] = center_y
-                                TRACKED[obj_id]["timestamp"] = time.time()
+                                local_speed_data[obj_id]["cx"] = center_x
+                                local_speed_data[obj_id]["cy"] = center_y
+                                local_speed_data[obj_id]["last_y"] = center_y
+                                local_speed_data[obj_id]["timestamp"] = time.time()
                     # --- AKHIR KECEPATAN DARI REMOTE ---
 
                     used_detection_indices.add(detection_idx)
@@ -353,9 +362,9 @@ class SimpleObjectTracker:
                     self.disappeared[object_id] += 1
                     if self.disappeared[object_id] > self.max_disappeared:
                         self.deregister(object_id)
-                    # Hapus dari TRACKED jika deregis
-                    if object_id in TRACKED:
-                        TRACKED.pop(object_id, None)
+                        local_speed_data.pop(
+                            object_id, None
+                        )  # 💡 Hapus dari data kecepatan lokal
 
                 else:
                     current_center = self.objects[object_id]["center"]
@@ -373,15 +382,11 @@ class SimpleObjectTracker:
 
     def transform_point(self, point):
         # transform_point tidak akan digunakan lagi dengan speed calculation baru
-        # Dibiarkan untuk kompatibilitas code lama jika ada
         if self.perspective_matrix is None:
             return point
         point_np = np.array([[[point[0], point[1]]]], dtype=np.float32)
         transformed_point = cv2.perspectiveTransform(point_np, self.perspective_matrix)
         return (transformed_point[0][0][0], transformed_point[0][0][1])
-
-    # Fungsi calculate_speed versi lama dihapus karena sudah diganti dengan logika di `update`
-    # dengan menggunakan global dictionary TRACKED.
 
 
 # --- FUNGSI DATABASE BARU (SQLAlchemy) ---
@@ -392,16 +397,13 @@ def cleanup_old_data(model, location_name, max_rows=50):
     Membersihkan baris data lama dari suatu model (tabel)
     untuk lokasi tertentu jika jumlah total baris melebihi batas.
     """
-    # Menggunakan Lock untuk mengatasi Race Condition
     with DB_CLEANUP_LOCK:
         try:
-            # 1. Hitung total baris untuk lokasi dan model ini
             current_row_count = model.query.filter_by(location=location_name).count()
 
             if current_row_count > max_rows:
                 rows_to_delete = current_row_count - max_rows
 
-                # 2. Ambil ID baris tertua
                 oldest_ids = (
                     db.session.query(model.id)
                     .filter_by(location=location_name)
@@ -410,7 +412,6 @@ def cleanup_old_data(model, location_name, max_rows=50):
                     .subquery()
                 )
 
-                # 3. Hapus baris yang memiliki ID tersebut
                 model.query.filter(model.id.in_(oldest_ids)).delete(
                     synchronize_session=False
                 )
@@ -431,36 +432,38 @@ def cleanup_old_data(model, location_name, max_rows=50):
 
 
 def reset_location_data(location_name):
+    """
+    [FUNGSI ADMIN] Melakukan reset total: menghapus tracker di memori
+    dan semua data analitik untuk lokasi ini di database.
+    """
     print(
-        f"[{threading.current_thread().name}] STARTING COMPLETE RESET FOR LOCATION: {location_name}"
+        f"[{threading.current_thread().name}] STARTING COMPLETE ADMIN RESET FOR LOCATION: {location_name}"
     )
+
+    # 💡 PERBAIKAN: Hapus dari GLOBAL_TRACKED_OBJECTS juga!
     if location_name in LOCATION_TRACKERS:
         LOCATION_TRACKERS[location_name].reset_completely()
         LOCATION_TRACKERS.pop(location_name, None)
     if location_name in LATEST_DETECTION_STATS:
         LATEST_DETECTION_STATS.pop(location_name, None)
+    if location_name in GLOBAL_TRACKED_OBJECTS:  # 💡 Hapus data kecepatan dari global
+        GLOBAL_TRACKED_OBJECTS.pop(location_name, None)
 
+    # 2. Hapus Data Historis dari DATABASE
     try:
         with get_flask_app_context():
-            # 💡 PERUBAHAN KRITIS: Hapus SEMUA data analitik untuk lokasi ini saat worker dimulai,
-            # menghilangkan filter waktu (one_hour_ago) untuk menjamin kondisi bersih.
-
-            CountingData.query.filter(
-                CountingData.location == location_name,
-            ).delete(synchronize_session=False)
-
+            CountingData.query.filter(CountingData.location == location_name).delete(
+                synchronize_session=False
+            )
             ParkingViolation.query.filter(
-                ParkingViolation.location == location_name,
+                ParkingViolation.location == location_name
             ).delete(synchronize_session=False)
-
-            OdolDetection.query.filter(
-                OdolDetection.location == location_name,
-            ).delete(synchronize_session=False)
-
+            OdolDetection.query.filter(OdolDetection.location == location_name).delete(
+                synchronize_session=False
+            )
             CrowdDetection.query.filter(
-                CrowdDetection.location == location_name,
+                CrowdDetection.location == location_name
             ).delete(synchronize_session=False)
-
             db.session.commit()
             print(
                 f"[{threading.current_thread().name}] Database RESET LENGKAP untuk {location_name} done."
@@ -471,10 +474,12 @@ def reset_location_data(location_name):
             db.session.rollback()
         except:
             pass
-        print(f"[{threading.current_thread().name}] Database cleanup error: {e}")
+        print(
+            f"[{threading.current_thread().name}] Database cleanup error during reset: {e}"
+        )
 
     print(
-        f"[{threading.current_thread().name}] COMPLETE RESET FINISHED FOR: {location_name}"
+        f"[{threading.current_thread().name}] COMPLETE ADMIN RESET FINISHED FOR: {location_name}"
     )
 
 
@@ -519,9 +524,7 @@ def save_counting_data(location, counts_jauh, counts_dekat):
             db.session.add(new_count)
             db.session.commit()
 
-            # 💡 PERBAIKAN KRITIS: Mengubah batas dari 50 menjadi 200 untuk CountingData
             cleanup_old_data(CountingData, location, max_rows=200)
-            # ----------------------------------------------------
 
     except Exception as e:
         try:
@@ -544,9 +547,7 @@ def save_parking_violation(location, vehicle_type, duration, obj_id):
             db.session.add(new_violation)
             db.session.commit()
 
-            # --- PERBAIKAN CLEANUP: Gunakan ParkingViolation Model ---
             cleanup_old_data(ParkingViolation, location, max_rows=50)
-            # --------------------------------------------------------
 
     except Exception as e:
         try:
@@ -566,9 +567,7 @@ def save_crowd_detection(location, crowd_size, duration):
             db.session.add(new_crowd)
             db.session.commit()
 
-            # --- PERBAIKAN CLEANUP: Gunakan CrowdDetection Model ---
             cleanup_old_data(CrowdDetection, location, max_rows=50)
-            # ------------------------------------------------------
 
     except Exception as e:
         try:
@@ -591,9 +590,7 @@ def save_odol_detection(location, vehicle_type, aspect_ratio, area):
             db.session.add(new_odol)
             db.session.commit()
 
-            # --- PERBAIKAN CLEANUP: Gunakan OdolDetection Model ---
             cleanup_old_data(OdolDetection, location, max_rows=50)
-            # -----------------------------------------------------
 
     except Exception as e:
         try:
@@ -601,9 +598,6 @@ def save_odol_detection(location, vehicle_type, aspect_ratio, area):
         except:
             pass
         print(f"[{threading.current_thread().name}] Database error (odol): {e}")
-
-
-# --- FUNGSI BARU UNTUK MENGHAPUS SEMUA DATA ANALITIK ---
 
 
 def delete_all_analytic_data():
@@ -674,43 +668,31 @@ def draw_bounding_boxes(
     location_name="unknown",
     crowd_member_ids=None,
     is_crowd=False,
+    config=None,  # 💡 Terima config
 ):
-    # --- Metode Draw Bounding Box disingkat, diasumsikan tidak diubah ---
     if crowd_member_ids is None:
         crowd_member_ids = set()
     output_frame = frame.copy()
 
-    # 💡 PERBAIKAN: Menggambar kedua garis hitungan secara eksplisit
-    # Garis Atas (LINE_1_COORDS)
-    cv2.line(
-        output_frame,
-        LINE_1_COORDS[0],
-        LINE_1_COORDS[1],
-        (0, 255, 255),  # Warna Kuning/Cyan
-        2,
-    )
+    # 💡 Ambil konfigurasi (fallback ke hardcode jika config tidak diteruskan)
+    config = config if config is not None else {}
+    line1_y = config.get("line1_y", DEFAULT_LINE_1_Y)
+    line2_y = config.get("line2_y", DEFAULT_LINE_2_Y)
 
-    # Garis Bawah (LINE_2_COORDS)
-    cv2.line(
-        output_frame,
-        LINE_2_COORDS[0],
-        LINE_2_COORDS[1],
-        (0, 255, 255),  # Warna Kuning/Cyan
-        2,
-    )
-    # ------------------- AKHIR PERBAIKAN -------------------
+    # 💡 Perbaikan Garis: Gunakan variabel dinamis
+    cv2.line(output_frame, (0, line1_y), (600, line1_y), (0, 255, 255), 2)
+    cv2.line(output_frame, (0, line2_y), (600, line2_y), (0, 255, 255), 2)
 
-    h, w, _ = output_frame.shape
-
+    # ... [Kode Draw Panah: Gunakan variabel dinamis line1_y/line2_y] ...
     ARROW_SIZE = 15
     ARROW_COLOR_JAUH = (0, 255, 0)
     ARROW_COLOR_DEKAT = (0, 0, 255)
 
     triangle_jauh_coords = np.array(
         [
-            [200 - ARROW_SIZE, 198],
-            [200 + ARROW_SIZE, 198],
-            [200, 198 - ARROW_SIZE],
+            [200 - ARROW_SIZE, line1_y],
+            [200 + ARROW_SIZE, line1_y],
+            [200, line1_y - ARROW_SIZE],
         ],
         np.int32,
     )
@@ -718,14 +700,15 @@ def draw_bounding_boxes(
 
     triangle_dekat_coords = np.array(
         [
-            [450 - ARROW_SIZE, 244],
-            [450 + ARROW_SIZE, 244],
-            [450, 244 + ARROW_SIZE],
+            [450 - ARROW_SIZE, line2_y],
+            [450 + ARROW_SIZE, line2_y],
+            [450, line2_y + ARROW_SIZE],
         ],
         np.int32,
     )
     cv2.fillPoly(output_frame, [triangle_dekat_coords], ARROW_COLOR_DEKAT)
 
+    # ... [Kode Draw Tabel] ...
     COL_LABELS = ["Arah", "MOBIL", "MOTOR", "BUS", "TRUK"]
     START_X = 10
     START_Y = 12
@@ -834,16 +817,19 @@ def draw_bounding_boxes(
     if is_crowd:
         pass
 
+    # 💡 Ambil data kecepatan dari GLOBAL_TRACKED_OBJECTS[location_name]
+    local_speed_data = GLOBAL_TRACKED_OBJECTS.get(location_name, {})
+
     for object_id, obj in tracked_objects.items():
         bbox = obj["bbox"]
         class_name = obj["class_name"]
         x, y, w, h = bbox
 
         color = COLORS.get(class_name, (255, 255, 255))
-        label_text = f"{object_id}"
 
         # --- Penambahan dari Remote: Label Speed ---
-        speed = TRACKED.get(object_id, {}).get("speed", 0)
+        # 💡 Gunakan local_speed_data
+        speed = local_speed_data.get(object_id, {}).get("speed", 0)
         label_text = f"{object_id} [{speed:.1f} km/h]"
         # --- Akhir Penambahan dari Remote ---
 
@@ -857,14 +843,6 @@ def draw_bounding_boxes(
             elif tracker.is_odol_logged.get(object_id, False):
                 color = COLORS["odol"]
                 label_text = "ODOL"
-
-            # --- Penambahan dari Remote: Hapus logic lama speed/label parkir ---
-            # if class_name in ["car", "motorcycle", "bus"] and "KAPTEN MUSLIHAT" in location_name.upper():
-            #      speed_kph = tracker.calculate_speed(object_id)
-            #      label_text = f"{object_id} [{speed_kph:.1f} kmh]"
-            #      if tracker.is_parked.get(object_id, False):
-            #          label_text = "PARKIR LIAR"
-            # --- Akhir Penambahan dari Remote ---
 
         font_scale = 0.28
         padding = 2
@@ -1018,17 +996,43 @@ def run_detection_worker(
 
     thread_name = threading.current_thread().name
     print(f"[{thread_name}] WORKER DIMULAI: Memulai deteksi untuk: {location_name}")
-
-    # 💡 Perubahan: reset_location_data sekarang menghapus SEMUA data lama lokasi ini.
-    reset_location_data(location_name)
     init_database()
+
+    # ----------------------------------------------------------------------
+    # 💡 LANGKAH 1: MEMUAT KONFIGURASI DINAMIS DARI DB/DEFAULT
+    # ----------------------------------------------------------------------
+    cctv_config_data = {
+        "line1_y": DEFAULT_LINE_1_Y,
+        "line2_y": DEFAULT_LINE_2_Y,
+        "real_distance_m": DEFAULT_REAL_DISTANCE,
+        "pixel_distance": abs(DEFAULT_LINE_2_Y - DEFAULT_LINE_1_Y),
+    }
+
+    try:
+        with get_flask_app_context():
+            # Cari objek CCTV (Asumsi Anda sudah punya model CCTV yang diimpor)
+            cctv_obj = CCTV.query.filter_by(lokasi=location_name).first()
+            if cctv_obj:
+                # Ambil nilai dari DB, fallback ke DEFAULT jika None
+                l1 = getattr(cctv_obj, "line1_y", DEFAULT_LINE_1_Y)
+                l2 = getattr(cctv_obj, "line2_y", DEFAULT_LINE_2_Y)
+                dist = getattr(cctv_obj, "real_distance_m", DEFAULT_REAL_DISTANCE)
+
+                cctv_config_data["line1_y"] = l1
+                cctv_config_data["line2_y"] = l2
+                cctv_config_data["real_distance_m"] = dist
+                # Pastikan pixel_distance tidak nol (untuk menghindari ZeroDivisionError)
+                cctv_config_data["pixel_distance"] = max(1, abs(l2 - l1))
+
+    except Exception as e:
+        print(
+            f"[{thread_name}] WARNING: Gagal memuat config CCTV dari DB: {e}. Menggunakan default."
+        )
 
     # 💥 TAMBAHAN KRITIS: PAKSA CLEANUP SAAT WORKER BARU DIMULAI
     try:
         with get_flask_app_context():
-            # CountingData menggunakan batas 200
             cleanup_old_data(CountingData, location_name, max_rows=200)
-            # Model lainnya tetap 50
             cleanup_old_data(ParkingViolation, location_name, max_rows=50)
             cleanup_old_data(CrowdDetection, location_name, max_rows=50)
             cleanup_old_data(OdolDetection, location_name, max_rows=50)
@@ -1036,6 +1040,30 @@ def run_detection_worker(
             print(f"[{thread_name}] DEBUG: Initial cleanup completed.")
     except Exception as e:
         print(f"[{thread_name}] DEBUG: Initial cleanup failed: {e}")
+
+    # ----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
+    # 💡 LANGKAH 2: MANAJEMEN TRACKER DAN GLOBAL SPEED DATA (HINDARI RACE CONDITION)
+    # ----------------------------------------------------------------------
+
+    # 💥 Mengelola Tracker (Counting/Object ID) - Continuation Logic
+    if location_name not in LOCATION_TRACKERS:
+        tracker = SimpleObjectTracker(max_disappeared=80, max_distance=280, fps=10)
+        LOCATION_TRACKERS[location_name] = tracker
+        print(f"[{thread_name}] WORKER INFO: Tracker baru dibuat. Mulai dari nol.")
+    else:
+        tracker = LOCATION_TRACKERS[location_name]
+        print(
+            f"[{thread_name}] WORKER INFO: Menggunakan tracker yang sudah ada. Melanjutkan hitungan."
+        )
+
+    # 💥 Mengelola Global Speed Data (TRACKED) - Race Condition Fix
+    if location_name not in GLOBAL_TRACKED_OBJECTS:
+        GLOBAL_TRACKED_OBJECTS[location_name] = {}
+    local_speed_data = GLOBAL_TRACKED_OBJECTS[
+        location_name
+    ]  # Referensi lokal ke data lokasi ini
 
     if location_name not in LATEST_DETECTION_STATS:
         LATEST_DETECTION_STATS[location_name] = {
@@ -1050,17 +1078,14 @@ def run_detection_worker(
             "stat_total_pelanggaran": 0,
         }
 
-    tracker = SimpleObjectTracker(max_disappeared=80, max_distance=280, fps=10)
-    LOCATION_TRACKERS[location_name] = tracker
-
     frame_count = 0
     crowd_currently_logged = False
     is_crowd = False
-
     session_parking_count = 0
     session_odol_count = 0
-
     cap = None
+
+    # ----------------------------------------------------------------------
 
     try:
         while True:
@@ -1069,7 +1094,7 @@ def run_detection_worker(
                     f"[{thread_name}] WORKER INFO: Menerima sinyal berhenti. Keluar dari loop."
                 )
                 break
-
+            # ... [Kode koneksi stream] ...
             if cap is None:
                 print(
                     f"[{thread_name}] WORKER INFO: Mencoba koneksi ke stream {location_name}..."
@@ -1112,19 +1137,20 @@ def run_detection_worker(
             detections = []
             tracked_objects = {}
 
-            # --- Bagian yang berkonflik di sini: Frame skip rate untuk deteksi ---
-            # Mengambil versi REMOTE (frame_count % 3 == 0) karena lebih sering
             if frame_count % 3 == 0:
                 detections = detect_objects(
                     frame, confidence_threshold=0.5, classes_to_detect=[0, 2, 3, 5]
                 )
-            # --- Akhir bagian konflik ---
 
-            tracked_objects = tracker.update(detections)
+            # 💡 PERUBAHAN: Panggil update dengan konfigurasi & data kecepatan lokal
+            tracked_objects = tracker.update(
+                detections, cctv_config_data, local_speed_data
+            )
 
             is_crowd, crowd_ids = detect_crowd(
                 tracked_objects, min_crowd_size=2, crowd_radius_threshold=40
             )
+            # ... [Kode pelanggaran (crowd, parking, odol)] ...
 
             if is_crowd and not crowd_currently_logged:
                 current_time = time.time()
@@ -1215,6 +1241,7 @@ def run_detection_worker(
                 save_counting_data(location_name, counts_jauh_data, counts_dekat_data)
             # --- AKHIR LOGIKA PENYIMPANAN COUNTING BERKALA ---
 
+            # 💡 PERUBAHAN: Panggil draw dengan konfigurasi dinamis
             output_frame = draw_bounding_boxes(
                 frame,
                 tracked_objects,
@@ -1222,6 +1249,7 @@ def run_detection_worker(
                 location_name=location_name,
                 crowd_member_ids=crowd_ids,
                 is_crowd=is_crowd,
+                config=cctv_config_data,
             )
 
             counts_jauh = dict(tracker.counts_menuju_jauh)
@@ -1257,20 +1285,18 @@ def run_detection_worker(
             LATEST_DETECTION_STATS[location_name] = current_stats
 
             if frame_count % 10 == 0:
-                # --- LOGIKA EMIT SOCKETIO DARI REMOTE (MENGGUNAKAN TRACKED untuk kecepatan) ---
-
-                # Hitung kecepatan rata-rata kendaraan yang sedang terlihat
                 speed_values = []
+                # Hitung kecepatan rata-rata dari data lokal
                 for obj_id, obj in tracked_objects.items():
                     if obj["class_name"] in ["car", "motorcycle", "bus", "truck"]:
-
-                        # Ambil speed dari TRACKED, bukan dari calculate_speed
-                        if obj_id in TRACKED and "speed" in TRACKED[obj_id]:
-                            speed_values.append(TRACKED[obj_id]["speed"])
+                        if (
+                            obj_id in local_speed_data
+                            and "speed" in local_speed_data[obj_id]
+                        ):
+                            speed_values.append(local_speed_data[obj_id]["speed"])
                         else:
                             speed_values.append(0)
 
-                # Menghindari ZeroDivisionError
                 valid_speed_values = [s for s in speed_values if s > 0]
                 avg_speed = (
                     sum(valid_speed_values) / len(valid_speed_values)
@@ -1281,13 +1307,16 @@ def run_detection_worker(
                 speed_jauh = []
                 speed_dekat = []
 
-                for obj_id, obj in TRACKED.items():
-                    # dicek apakah object berada di jalur jauh atau dekat
+                # Filter speed berdasarkan zona (menggunakan config dinamis)
+                line1_y_local = cctv_config_data["line1_y"]
+                line2_y_local = cctv_config_data["line2_y"]
+
+                for obj_id, obj in local_speed_data.items():
                     try:
                         last_y = obj["last_y"]
-                        if last_y < LINE_1_COORDS[0][1] and obj["speed"] > 0:
+                        if last_y < line1_y_local and obj["speed"] > 0:
                             speed_jauh.append(obj["speed"])
-                        elif last_y > LINE_2_COORDS[0][1] and obj["speed"] > 0:
+                        elif last_y > line2_y_local and obj["speed"] > 0:
                             speed_dekat.append(obj["speed"])
                     except:
                         pass
@@ -1318,7 +1347,6 @@ def run_detection_worker(
                 }
 
                 socketio.emit("update_stats_realtime", stats_packet)
-                # --- AKHIR LOGIKA EMIT SOCKETIO DARI REMOTE ---
 
             end_time = time.time()
             elapsed_time = end_time - start_time
@@ -1332,8 +1360,6 @@ def run_detection_worker(
     finally:
         if cap:
             cap.release()
-        if location_name in LOCATION_TRACKERS:
-            del LOCATION_TRACKERS[location_name]
         if location_name in LATEST_DETECTION_STATS:
             del LATEST_DETECTION_STATS[location_name]
 
@@ -1434,5 +1460,4 @@ def generate_frames_preview_only(stream_url):
 
 
 if __name__ == "__main__":
-    # init_database() dihapus karena tidak lagi diperlukan dengan set_global_app_instance
     print("Analyzer module ready. Must be run via run.py.")

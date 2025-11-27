@@ -3,15 +3,18 @@ from jinja2 import TemplateNotFound
 import pandas as pd
 import json
 import math
+
+# 💡 Pastikan import model CCTV dan BatasWilayah sudah benar
 from ..models import CCTV, BatasWilayah
 
 # Diasumsikan Anda memiliki file analyzer.py di root atau di lokasi yang bisa diimpor
-# Jika file ini tidak ada, Anda perlu membuatnya atau menghapus impor & fungsionalitas terkait
 try:
     from analyzer import (
         generate_frames,
         LATEST_DETECTION_STATS,
         generate_frames_preview_only,
+        # 💡 Tambahkan variabel global baru yang digunakan untuk tracking per lokasi
+        GLOBAL_TRACKED_OBJECTS,
     )
 except ImportError:
     # Fallback jika analyzer tidak ada, agar aplikasi tidak crash
@@ -19,7 +22,7 @@ except ImportError:
     generate_frames = None
     LATEST_DETECTION_STATS = {}
     generate_frames_preview_only = None
-
+    GLOBAL_TRACKED_OBJECTS = {}
 
 # Import model dari database
 from ..models import CCTV, BatasWilayah
@@ -69,7 +72,6 @@ def swap_coords(coords):
             # Lanjutkan rekursi ke dalam list
             return [swap_coords(c) for c in coords]
     return coords
-
 
 
 @user_bp.route("/dashboard")
@@ -238,6 +240,7 @@ def cctv():
 
 # Di dalam app/user/routes.py
 
+
 @user_bp.route("/")
 @user_bp.route("/kepadatan")  # <-- Ini adalah URL baru Anda
 def kepadatan():
@@ -252,7 +255,7 @@ def kepadatan():
         # 2. Siapkan data CCTV untuk digunakan di JavaScript
         cctv_data_for_js = [
             {
-                "index": c.id,
+                "id": c.id,  # 💡 Mengganti "index" menjadi "id" (Lebih konsisten)
                 "lokasi": c.lokasi,
                 "status": c.status,
                 "type": c.type,
@@ -336,16 +339,32 @@ def get_detection_status(cctv_id: int):
 @user_bp.route("/api/scan/<int:cctv_id>/data")
 def get_scan_data(cctv_id: int):
     cctv = CCTV.query.get_or_404(cctv_id)
-    stats = LATEST_DETECTION_STATS.get(cctv.lokasi.upper())
-    if stats and "total_counts" in stats:
-        detection_counts = stats["total_counts"]
-    else:
-        detection_counts = {"person": 0, "car": 0, "motorcycle": 0, "bus": 0}
+    # Kunci dictionary di analyzer.py harus menggunakan .lokasi (yang unik)
+    stats = LATEST_DETECTION_STATS.get(cctv.lokasi)
+
+    # Perbaikan: Data yang dikirim dari analyzer.py tidak memiliki kunci 'total_counts'
+    # Data yang dikirim adalah counts_jauh dan counts_dekat
+
+    # Ambil counts_jauh dan counts_dekat dari stats
+    counts_jauh = stats.get("counts_jauh", {}) if stats else {}
+    counts_dekat = stats.get("counts_dekat", {}) if stats else {}
+
+    # Hitung total counts untuk display
+    detection_counts = {
+        "person": counts_jauh.get("person", 0) + counts_dekat.get("person", 0),
+        "car": counts_jauh.get("car", 0) + counts_dekat.get("car", 0),
+        "motorcycle": counts_jauh.get("motorcycle", 0)
+        + counts_dekat.get("motorcycle", 0),
+        "bus": counts_jauh.get("bus", 0) + counts_dekat.get("bus", 0),
+    }
+
     return jsonify(
         {
             "location": cctv.lokasi,
-            "detections": detection_counts,
+            "detections": detection_counts,  # Ini sekarang data yang lebih akurat
             "status": cctv.status.lower(),
+            # 💡 NOTE: Data kecepatan harus diambil dari LATEST_DETECTION_STATS
+            # jika Anda ingin menampilkannya. Saat ini hanya menampilkan counts.
         }
     )
 
@@ -380,6 +399,7 @@ def analyze_stream(cctv_id: int):
     ):
         return "Stream tidak mendukung deteksi.", 400
     return Response(
+        # Menggunakan cctv.lokasi sebagai kunci unik worker
         generate_frames(cctv.stream_url, cctv.lokasi, detection_mode="enhanced"),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
@@ -391,6 +411,7 @@ def video_feed(cctv_id: int):
     if not cctv.stream_url or not generate_frames:
         return "URL Stream tidak valid.", 400
     return Response(
+        # Menggunakan cctv.lokasi sebagai kunci unik worker
         generate_frames(cctv.stream_url, cctv.lokasi),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
