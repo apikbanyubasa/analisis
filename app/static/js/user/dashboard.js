@@ -79,7 +79,11 @@ function selectCCTV(cctvId) {
     resetDetectionData();
     updateDetectionDisplay(cctv);
 
-    if (cctv.status.toLowerCase() === 'aktif' && cctv.stream_url) {
+    if (
+      cctv.status.toLowerCase() === 'aktif' &&
+      cctv.stream_url &&
+      (cctv.stream_url.endsWith('.m3u8') || cctv.stream_url.startsWith('rtsp://'))
+    ) {
         setTimeout(startDetection, 500);
     } else {
         if (loadingIndicator) loadingIndicator.style.display = 'none';
@@ -92,7 +96,7 @@ function updateDetectionDisplay(cctv) {
 
     if (loadingIndicator) loadingIndicator.style.display = 'flex';
 
-    if (cctv.status.toLowerCase() === 'aktif' && cctv.stream_url && cctv.stream_url.endsWith('.m3u8')) {
+    if (cctv.status.toLowerCase() === 'aktif' && cctv.stream_url && (cctv.stream_url.endsWith('.m3u8') || cctv.stream_url.startsWith('rtsp://'))) {
         detectionContainer.innerHTML = `
         <img
           id="detection-stream"

@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import easyocr
 from datetime import datetime, timedelta
 import time
 import threading
@@ -7,6 +8,7 @@ from ultralytics import YOLO
 import os
 from collections import defaultdict, deque
 import math
+import re
 
 # --- Impor dari Flask dan Model untuk akses DB terpusat ---
 # Kita HANYA mengimpor create_app, db, dan Models, tidak perlu Flask/current_app
@@ -67,13 +69,21 @@ except Exception as e:
     print(f"Error loading YOLO model: {e}")
     model = None
 
+# 2. [BARU] Load Model Deteksi Plat (Punya Kamu)
+try:
+    plate_model = YOLO("models/best.pt")
+    print("✅ YOLO Plate Model loaded successfully")
+except Exception as e:
+    print(f"❌ Error loading YOLO Plate model: {e}")
+    plate_model = None
 
 # Load EasyOCR Reader
 try:
-    READER_OCR = None
-    print("EasyOCR reader dinonaktifkan untuk tes performa.")
+    # gpu=True jika pakai NVIDIA, gpu=False jika CPU
+    READER_OCR = easyocr.Reader(['id', 'en'], gpu=False) 
+    print("✅ EasyOCR reader siap.")
 except Exception as e:
-    print(f"Error loading EasyOCR: {e}")
+    print(f"❌ Error loading EasyOCR: {e}")
     READER_OCR = None
 
 
@@ -844,7 +854,17 @@ def draw_bounding_boxes(
 
         # --- Penambahan dari Remote: Label Speed ---
         speed = TRACKED.get(object_id, {}).get("speed", 0)
-        label_text = f"{object_id} [{speed:.1f} km/h]"
+        plat_nomor = obj.get("plate_number", None)
+
+        # --- FORMAT LABEL ---
+        if plat_nomor:
+            # Ada Plat: "9 [12.5 km/h] B 1234 KA"
+            label_text = f"{object_id} [{speed:.1f} km/h] {plat_nomor}"
+            color = (0, 255, 0) # HIJAU = Sudah discan
+        else:
+            # Belum Ada Plat: "9 [12.5 km/h]"
+            label_text = f"{object_id} [{speed:.1f} km/h]"
+            
         # --- Akhir Penambahan dari Remote ---
 
         if class_name == "person" and object_id in crowd_member_ids:
@@ -929,30 +949,79 @@ def get_stream_from_m3u8(m3u8_url, max_retries=3):
     return None
 
 
-def recognize_plate(frame, plate_bbox):
-    if READER_OCR is None:
-        return "OCR Gagal"
-    x, y, w, h = plate_bbox
-    x1, y1, x2, y2 = x, y, x + w, y + h
-    h_frame, w_frame, _ = frame.shape
-    x1 = max(0, x1)
-    y1 = max(0, y1)
-    x2 = min(w_frame, x2)
-    y2 = min(h_frame, y2)
-    plate_crop = frame[y1:y2, x1:x2]
-    if plate_crop.size == 0:
-        return "Area Kosong"
+def recognize_plate(frame, vehicle_bbox):
+    """
+    Mendeteksi plat nomor menggunakan best.pt lalu membacanya dengan OCR.
+    """
+    if READER_OCR is None or plate_model is None:
+        return "System Error"
+
+    # 1. Crop Gambar Kendaraan
+    x, y, w, h = vehicle_bbox
+    h_img, w_img, _ = frame.shape
+    
+    # Validasi koordinat agar tidak error
+    x1, y1 = max(0, x), max(0, y)
+    x2, y2 = min(w_img, x + w), min(h_img, y + h)
+    
+    vehicle_crop = frame[y1:y2, x1:x2]
+    
+    if vehicle_crop.size == 0:
+        return "Gagal Crop"
+
     try:
-        results = READER_OCR.readtext(plate_crop)
-        if results:
-            plate_text = results[0][1]
-            clean_text = plate_text.upper().replace(" ", "").replace(".", "")
-            return clean_text
-        else:
-            return "Tidak Terdeteksi"
+        # 2. Deteksi Lokasi Plat menggunakan best.pt
+        # conf=0.25 artinya minimal yakin 25% itu plat
+        results = plate_model(vehicle_crop, conf=0.25, verbose=False)
+        
+        plate_text = "Tidak Terbaca"
+        
+        for result in results:
+            boxes = result.boxes
+            if len(boxes) > 0:
+                # Ambil deteksi dengan confidence tertinggi
+                best_box = boxes[0]
+                px1, py1, px2, py2 = best_box.xyxy[0].tolist()
+                
+                # 3. Crop Gambar Plat
+                # Koordinat plat ini relatif terhadap vehicle_crop
+                plate_img = vehicle_crop[int(py1):int(py2), int(px1):int(px2)]
+                
+                # Preprocessing sedikit biar OCR makin jago (Grayscale)
+                gray_plate = cv2.cvtColor(plate_img, cv2.COLOR_BGR2GRAY)
+                _, binary_plate = cv2.threshold(gray_plate, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+                # 4. Baca Teks pakai EasyOCR
+                ocr_result = READER_OCR.readtext(binary_plate, detail=0, allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+                
+                if ocr_result:
+                    # Gabungkan semua teks yang terbaca
+                    raw_text = "".join(ocr_result).upper().replace(" ", "")
+                    
+                    # --- FILTER REGEX (PLAT INDONESIA) ---
+                    # Pola: 1-2 Huruf awal + 1-4 Angka + 1-3 Huruf akhir
+                    # Contoh: F 1234 AB -> F1234AB (Cocok)
+                    # Contoh: VLERA -> (Gak ada angka, Gak Cocok -> Dibuang)
+                    
+                    pola_plat = r"^[A-Z]{1,2}\d{1,4}[A-Z]{1,3}$"
+                    
+                    match = re.match(pola_plat, raw_text)
+                    
+                    if match:
+                        # Format ulang biar cantik (F 1234 AB)
+                        # Kita pisahkan huruf depan, angka, dan huruf belakang
+                        clean_text = raw_text
+                        plate_text = clean_text 
+                        print(f"🎯 PLAT VALID DITEMUKAN: {plate_text}")
+                        return plate_text  # Langsung kembalikan yang valid
+                    else:
+                        print(f"⚠️ Teks dibuang (Bukan Plat): {raw_text}")
+
+        return "Tidak Terbaca"
+
     except Exception as e:
-        print(f"[{threading.current_thread().name}] EasyOCR error: {e}")
-        return "OCR Error"
+        print(f"Error proses plat: {e}")
+        return "Error"
 
 
 def detect_crowd(tracked_objects, min_crowd_size=5, crowd_radius_threshold=100):
@@ -1007,6 +1076,31 @@ def detect_crowd(tracked_objects, min_crowd_size=5, crowd_radius_threshold=100):
                     crowd_member_ids.add(obj_ids[idx_in_component])
 
     return len(crowd_member_ids) > 0, crowd_member_ids
+
+def get_stream(stream_url):
+    # Jika RTSP
+    if stream_url.startswith("rtsp://"):
+        print(f"[{threading.current_thread().name}] Mencoba membuka RTSP stream...")
+        cap = cv2.VideoCapture(stream_url)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        ret, test_frame = cap.read()
+        if ret and test_frame is not None:
+            print(f"[{threading.current_thread().name}] RTSP connected successfully.")
+            return cap
+        else:
+            print(f"[{threading.current_thread().name}] RTSP gagal dibuka.")
+            cap.release()
+            return None
+
+    # Jika M3U8
+    elif stream_url.endswith(".m3u8"):
+        print(f"[{threading.current_thread().name}] Membuka stream M3U8...")
+        return get_stream_from_m3u8(stream_url)
+
+    else:
+        print(f"[{threading.current_thread().name}] Format stream tidak dikenal: {stream_url}")
+        return None
 
 
 # -------------------------------------------------------------------
@@ -1074,7 +1168,7 @@ def run_detection_worker(
                 print(
                     f"[{thread_name}] WORKER INFO: Mencoba koneksi ke stream {location_name}..."
                 )
-                cap = get_stream_from_m3u8(stream_url)
+                cap = get_stream(stream_url)
 
                 if cap is None:
                     continue
@@ -1122,6 +1216,38 @@ def run_detection_worker(
 
             tracked_objects = tracker.update(detections)
 
+            # ==========================================================
+            # LOGIKA: AUTO-SCAN SEMUA KENDARAAN (AGAR PLAT MUNCUL)
+            # ==========================================================
+            
+            # Cek setiap 5 frame sekali supaya laptop tidak berat
+            if frame_count % 5 == 0:
+                
+                for obj_id, obj in tracked_objects.items():
+                    # Hanya proses Mobil, Motor, Bus, Truk
+                    if obj["class_name"] in ["car", "motorcycle", "bus", "truck"]:
+                        
+                        # CEK PENTING: Apakah mobil ini SUDAH punya plat?
+                        # Kalau SUDAH ada di memori, SKIP (JANGAN SCAN LAGI) -> Hemat CPU
+                        if "plate_number" in tracker.objects[obj_id]:
+                            continue 
+
+                        # Kalau BELUM ada, Scan Platnya sekarang!
+                        # Filter ukuran: hanya scan kalau objek cukup besar (biar akurat)
+                        area_objek = obj["bbox"][2] * obj["bbox"][3]
+                        if area_objek > 3000: 
+                            
+                            # Panggil Model best.pt + EasyOCR
+                            plat = recognize_plate(frame, obj["bbox"])
+                            
+                            # Jika berhasil terbaca
+                            if plat and plat != "Tidak Terbaca" and len(plat) > 2:
+                                # SIMPAN KE MEMORI (Agar muncul terus di layar)
+                                tracker.objects[obj_id]["plate_number"] = plat
+                                print(f"✅ PLAT TERDETEKSI: ID {obj_id} -> {plat}")
+
+            # ==========================================================
+
             is_crowd, crowd_ids = detect_crowd(
                 tracked_objects, min_crowd_size=2, crowd_radius_threshold=40
             )
@@ -1160,23 +1286,40 @@ def run_detection_worker(
                     was_parked = tracker.is_parked.get(obj_id, False)
                     now_parked = parked_duration > 50
 
-                    if not was_parked and now_parked:
+                    # ... (kode sebelumnya di dalam loop should_detect) ...
+
+                    if not was_parked and now_parked: # Saat terdeteksi parkir liar
+                        
+                        # --- INTEGRASI BARU ---
+                        detected_plate = "Unknown"
+                        
+                        # Panggil fungsi recognize_plate yang baru
+                        # Kita kirim frame utuh dan bbox kendaraan
+                        detected_plate = recognize_plate(frame, obj["bbox"])
+                        
+                        print(f"⚠️ PARKIR LIAR: ID {obj_id} | Jenis: {cls_name} | Plat: {detected_plate}")
+                        # ----------------------
+
+                        # Simpan ke DB (Update fungsi save_parking_violation jika kamu mau simpan platnya ke DB)
                         save_parking_violation(
                             location_name, obj["class_name"], parked_duration, obj_id
                         )
+                        
                         session_parking_count += 1
                         try:
                             socketio.emit(
                                 "notifikasi_baru",
                                 {
                                     "title": "🅿️ Parkir Liar Terdeteksi!",
-                                    "detail": f'Satu {obj["class_name"]} parkir liar di {location_name} (ID: {obj_id}).',
+                                    # Tampilkan Plat di notifikasi Dashboard
+                                    "detail": f'{obj["class_name"]} (Plat: {detected_plate}) parkir liar di {location_name}.',
                                     "icon": "error",
                                     "location": location_name,
                                 },
                             )
                         except Exception as e:
-                            print(f"[{thread_name}] SocketIO emit error (parking): {e}")
+                            print(f"SocketIO error: {e}")
+                    
                     tracker.is_parked[obj_id] = now_parked
 
                     if obj["class_name"] == "bus":
