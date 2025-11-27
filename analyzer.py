@@ -76,7 +76,7 @@ except Exception as e:
     print(f"Error loading YOLO model: {e}")
     model = None
 
-# 2. [BARU] Load Model Deteksi Plat
+# 2. [BARU] Load Model Deteksi Plat (Punya Kamu)
 try:
     plate_model = YOLO("models/best.pt")
     print("✅ YOLO Plate Model loaded successfully")
@@ -265,7 +265,7 @@ class SimpleObjectTracker:
                 if min_object_id is not None:
                     self.objects[min_object_id]["center"] = detection["center"]
                     self.objects[min_object_id]["bbox"] = detection["bbox"]
-                    self0.objects[min_object_id]["confidence"] = detection["confidence"]
+                    self.objects[min_object_id]["confidence"] = detection["confidence"]
                     self.disappeared[min_object_id] = 0
 
                     obj_id = min_object_id
@@ -840,16 +840,15 @@ def draw_bounding_boxes(
         # --- Penambahan dari Remote: Label Speed ---
         # 💡 Gunakan local_speed_data
         speed = local_speed_data.get(object_id, {}).get("speed", 0)
-        # 💡 PERBAIKAN MERGE CONFLICT: Tambahkan logika Plat Nomor
-        plat_nomor = obj.get("plate_number", None)
+
+        # 💡 PERBAIKAN MERGE CONFLICT: Ambil Plat Nomor dari tracker.objects
+        plat_nomor = tracker.objects[object_id].get("plate_number")
 
         # --- FORMAT LABEL ---
         if plat_nomor:
-            # Ada Plat: "9 [12.5 km/h] B 1234 KA"
             label_text = f"{object_id} [{speed:.1f} km/h] {plat_nomor}"
             color = (0, 255, 0)  # HIJAU = Sudah discan
         else:
-            # Belum Ada Plat: "9 [12.5 km/h]"
             label_text = f"{object_id} [{speed:.1f} km/h]"
         # --- Akhir Penambahan dari Remote ---
 
