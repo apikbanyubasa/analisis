@@ -57,8 +57,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // 🗺️ GEOJSON & COLOR MAPPING
     // =================================================================
 
+    // Definisikan style default GeoJSON di luar fungsi agar mudah diakses
+    const DEFAULT_GEOJSON_STYLE = { 
+        color: "#444", 
+        weight: 1, 
+        fillOpacity: 0.15, 
+        fillColor: "#888",
+        opacity: 1 // Tambahkan opacity penuh
+    };
+
     const kecamatanLayer = L.geoJSON(batasKecamatanData, {
-        style: { color: "#444", weight: 1, fillOpacity: 0.15, fillColor: "#888" },
+        style: DEFAULT_GEOJSON_STYLE, // Gunakan style default
     }).bindPopup((layer) => `<b>${layer.feature.properties.name}</b>`).addTo(map);
 
     const WARNA_KECAMATAN = [
@@ -114,15 +123,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const isAktif = data.status?.toLowerCase() === "aktif";
     const hasVideo = isAktif && data.video_url;
 
-    // --- PERUBAHAN DI SINI ---
-    // Ganti placeholder gambar menjadi div dengan teks
     const feedContent = hasVideo
         ? `<iframe class="w-full h-full object-cover" data-src="${data.video_url}" src="" frameborder="0" allow="autoplay; encrypted-media" muted playsinline scrolling="no"></iframe>`
         : `<div class="w-full h-full flex flex-col items-center justify-center bg-gray-800 text-gray-500">
              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.55a1 1 0 011.45.89V18a1 1 0 01-1.45.89L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
              <span class="text-xs font-semibold">Stream Tidak Tersedia</span>
            </div>`;
-    // --- AKHIR PERUBAHAN ---
 
     return `
       <div class="bg-[#2d3748] rounded-lg overflow-hidden cursor-pointer text-white hover:bg-gray-600"
@@ -148,11 +154,10 @@ document.addEventListener('DOMContentLoaded', () => {
         allMarkers.forEach((markerInfo) => {
         const isAktif = markerInfo.data.status?.toLowerCase() === "aktif";
         const statusVisible = (showAktif && isAktif) || (showNonaktif && !isAktif);
-        // Hapus atau abaikan filter kecamatan untuk debugging
-        // const kecamatanVisible = selectedKecamatan === "semua" || markerInfo.kecamatan === selectedKecamatan; 
-        const kecamatanVisible = true; // <--- SET INI KE TRUE UNTUK DEBUGGING
+        const kecamatanVisible = selectedKecamatan === "semua" || markerInfo.kecamatan === selectedKecamatan; 
+        
 
-        if (statusVisible && kecamatanVisible) { // <--- HANYA GUNAKAN statusVisible
+        if (statusVisible && kecamatanVisible) { 
             markerInfo.leafletMarker.addTo(map);
             allCardsHTML += createCctvCardHTML(markerInfo);
         } else {
@@ -173,13 +178,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function searchMarkers() {
         const keyword = document.getElementById("search-input").value.trim().toLowerCase();
-        selectedKecamatan = "semua";
+        
+        selectedKecamatan = "semua"; 
         document.getElementById("filter-kecamatan-label").innerText = "Filter Kecamatan";
+        
         document.getElementById("toggle-aktif").checked = true;
         document.getElementById("toggle-nonaktif").checked = true;
 
+        // Reset style dan bounds GeoJSON ke default
         kecamatanLayer.eachLayer((layer) => {
-            layer.setStyle({ color: "#444", weight: 1, fillOpacity: 0.15, fillColor: "#888" });
+            layer.setStyle(DEFAULT_GEOJSON_STYLE); // Gunakan style default yang sudah didefinisikan
             if (!map.hasLayer(layer)) {
                 map.addLayer(layer);
             }
@@ -217,63 +225,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // cctv.js
+    function pilihKecamatan(nama, isInit = false) {
+        selectedKecamatan = nama;
+        const labelElement = document.getElementById("filter-kecamatan-label");
+        labelElement.innerText = nama === "semua" ? "Filter Kecamatan" : nama;
+        
+        // Definisikan style untuk layer yang 'tersembunyi'
+        const hiddenStyle = {
+            opacity: 0,
+            fillOpacity: 0,
+        };
 
-function pilihKecamatan(nama, isInit = false) {
-    selectedKecamatan = nama;
-    const labelElement = document.getElementById("filter-kecamatan-label");
-    labelElement.innerText = nama === "semua" ? "Filter Kecamatan" : nama;
+        let targetBounds = null;
 
-    // Definisikan style default dan style untuk layer yang 'tersembunyi'
-    const visibleStyle = {
-        color: "#444",
-        weight: 1,
-        fillOpacity: 0.15,
-        fillColor: "#888",
-    };
-    const hiddenStyle = {
-        opacity: 0,
-        fillOpacity: 0,
-    };
+        kecamatanLayer.eachLayer((layer) => {
+            const layerName = layer.feature.properties.name;
 
-    let targetBounds = null;
-
-    kecamatanLayer.eachLayer((layer) => {
-        const layerName = layer.feature.properties.name;
-
-        if (nama === "semua") {
-            // Jika "semua", tampilkan semua layer dengan style default
-            layer.setStyle(visibleStyle);
-        } else {
-            // Jika memilih kecamatan spesifik
-            if (layerName === nama) {
-                // Beri style highlight pada layer yang dipilih
-                const highlightColor = kecamatanColorMap[nama] || "#facc15";
-                layer.setStyle({
-                    color: highlightColor,
-                    weight: 2,
-                    fillOpacity: 0.5,
-                    fillColor: highlightColor,
-                });
-                targetBounds = layer.getBounds(); // Simpan bounds dari layer ini
+            if (nama === "semua") {
+                // FIX: Setel kembali style ke default secara eksplisit
+                layer.setStyle(DEFAULT_GEOJSON_STYLE);
+                
             } else {
-                // Sembunyikan layer lain dengan membuatnya transparan
-                layer.setStyle(hiddenStyle);
+                // Jika memilih kecamatan spesifik
+                if (layerName === nama) {
+                    // Beri style highlight pada layer yang dipilih
+                    const highlightColor = kecamatanColorMap[nama] || "#facc15";
+                    layer.setStyle({
+                        color: highlightColor,
+                        weight: 2,
+                        fillOpacity: 0.5,
+                        fillColor: highlightColor,
+                        opacity: 1, // Pastikan opacity penuh
+                    });
+                    targetBounds = layer.getBounds(); // Simpan bounds dari layer ini
+                } else {
+                    // Sembunyikan layer lain
+                    layer.setStyle(hiddenStyle);
+                }
             }
+        });
+
+        // Atur zoom peta
+        if (nama === "semua") {
+            map.fitBounds(kecamatanLayer.getBounds());
+        } else if (targetBounds) {
+            map.fitBounds(targetBounds.pad(0.1)); 
         }
-    });
-
-    // Atur zoom peta
-    if (nama === "semua") {
-        map.fitBounds(kecamatanLayer.getBounds());
-    } else if (targetBounds) {
-        map.fitBounds(targetBounds);
+        
+        updateMarkersVisibility();
     }
-
-    if (!isInit) {
-        toggleFilter('kecamatan');
-    }
-    updateMarkersVisibility();
-}
 
     function toggleFilter(type) {
         const statusDiv = document.getElementById("filter-status");
@@ -315,7 +315,8 @@ function pilihKecamatan(nama, isInit = false) {
     const observer = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
             const iframe = entry.target;
-            const videoId = iframe.dataset.id;
+            const videoId = iframe.dataset.id; 
+            if (!videoId) return;
 
             if (entry.isIntersecting) {
                 if (!activeVideos.has(videoId)) {
@@ -339,7 +340,11 @@ function pilihKecamatan(nama, isInit = false) {
 
     function observeCctvCards() {
         document.querySelectorAll("#cctv-preview-list iframe[data-src]").forEach((iframe, idx) => {
-            iframe.dataset.id = idx;
+            observer.unobserve(iframe); 
+        });
+        
+        document.querySelectorAll("#cctv-preview-list iframe[data-src]").forEach((iframe, idx) => {
+            iframe.dataset.id = `video-${idx}`; 
             observer.observe(iframe);
         });
     }
@@ -378,6 +383,12 @@ function pilihKecamatan(nama, isInit = false) {
         item.addEventListener("click", () => {
             const kecamatanName = item.getAttribute("data-kecamatan");
             pilihKecamatan(kecamatanName);
+
+            // FIX: Tutup dropdown filter kecamatan secara manual
+            const kecamatanDiv = document.getElementById("filter-kecamatan-content");
+            const kecamatanArrow = document.getElementById("kecamatan-arrow");
+            kecamatanDiv.classList.add("hidden");
+            kecamatanArrow.classList.remove("rotate-180");
         });
     });
 
@@ -387,8 +398,8 @@ function pilihKecamatan(nama, isInit = false) {
     // =================================================================
 
     updateCctvCount();
-    updateMarkersVisibility();
-    pilihKecamatan("semua", true);
+    updateMarkersVisibility(); 
+    pilihKecamatan("semua", true); // Panggil untuk pertama kali, memastikan tampilan "semua"
 
     // Force map refresh untuk memastikan tiles ter-load dengan baik
     setTimeout(() => {
