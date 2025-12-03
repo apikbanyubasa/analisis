@@ -16,6 +16,7 @@ from analyzer import (
     LOCATION_TRACKERS,
     reset_location_data,
     GLOBAL_TRACKED_OBJECTS,  # Variabel global baru untuk data kecepatan per lokasi
+    GLOBAL_NOTIFICATION_ENABLED, 
 )
 from flask import (
     Blueprint,
@@ -30,6 +31,11 @@ from flask import (
     Response,
     current_app,
 )
+
+# --- TAMBAHKAN BARIS INI ---
+from .. import socketio
+# ---------------------------
+
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 from .. import db
@@ -1164,6 +1170,23 @@ def get_crowd_stats(camera_id: int):  # <-- Ganti ke camera_id
         )
 
 
+# --- TAMBAHKAN FUNGSI INI UNTUK KONTROL NOTIFIKASI ---
+@socketio.on('toggle_all_notifications')
+def handle_toggle_all_notifications():
+    """
+    Menerima sinyal dari frontend untuk membalik status notifikasi global.
+    """
+    global GLOBAL_NOTIFICATION_ENABLED
+    GLOBAL_NOTIFICATION_ENABLED = not GLOBAL_NOTIFICATION_ENABLED
+    
+    status = "Aktif" if GLOBAL_NOTIFICATION_ENABLED else "Non-aktif"
+    print(f"Status notifikasi global diubah menjadi: {status}")
+    
+    # Kirim status terbaru ke semua klien yang terhubung
+    socketio.emit('notification_status_update', {'enabled': GLOBAL_NOTIFICATION_ENABLED})
+# --- AKHIR FUNGSI ---
+
+
 def get_camera_by_id(camera_id):
     """Fungsi helper baru untuk mencari kamera berdasarkan ID database-nya."""
     # Gunakan ID untuk mencari objek CCTV langsung dari database
@@ -1216,3 +1239,27 @@ def plate_video_stream(camera_id: int):
         generate_frames(camera.stream_url, camera.lokasi, detection_mode="plate"),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
+
+# Tambahkan ini di routes.py (terpisah dari parking_video_stream)
+
+@admin_bp.route('/api/parking_violations')
+@login_required
+def api_parking_violations():
+    # Ini memberikan DATA JSON untuk statistik & log
+    try:
+        data = ParkingViolation.query.order_by(ParkingViolation.timestamp.desc()).limit(20).all()
+        result = [{'id': v.id, 'location': v.location, 'timestamp': v.timestamp.isoformat()} for v in data]
+        return jsonify(result)
+    except:
+        return jsonify([])
+
+@admin_bp.route('/api/odol_detections')
+@login_required
+def api_odol_detections():
+    # Ini memberikan DATA JSON untuk statistik & log ODOL
+    try:
+        data = OdolDetection.query.order_by(OdolDetection.timestamp.desc()).limit(20).all()
+        result = [{'id': d.id, 'location': d.location, 'timestamp': d.timestamp.isoformat()} for d in data]
+        return jsonify(result)
+    except:
+        return jsonify([])

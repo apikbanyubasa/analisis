@@ -8,20 +8,17 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
 
-    <!-- 1. TAMBAHKAN LIBRARY SOCKET.IO -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
       .clickable-toast {
         cursor: pointer;
       }
     </style>
-    <!-- AKHIR TAMBAHAN -->
-
     {% block head %}{% endblock %}
   </head>
   <body class="bg-gray-50">
     <div
-      class="w-64 bg-gradient-to-b from-purple-900 via-purple-800 to-purple-900 min-h-screen text-white fixed left-0 top-0 z-50 transition-transform duration-300 lg:translate-x-0 -translate-x-full **relative overflow-hidden**"
+      class="w-64 bg-gradient-to-b from-purple-900 via-purple-800 to-purple-900 min-h-screen text-white fixed left-0 top-0 z-50 transition-transform duration-300 lg:translate-x-0 -translate-x-full overflow-hidden"
     >
       <div class="p-6 border-b border-purple-700">
         <div class="flex items-center space-x-3">
@@ -37,7 +34,7 @@
         </div>
       </div>
 
-      <div class="py-6 **overflow-y-auto**" **style="max-height: calc(100vh - 116px - 72px);" **>
+      <div class="py-6 overflow-y-auto" style="max-height: calc(100vh - 116px - 72px);">
         <div class="px-6 mb-4">
           <h3 class="text-xs font-semibold text-purple-300 uppercase tracking-wider">Sistem</h3>
         </div>
@@ -150,12 +147,22 @@
         </nav>
       </div>
 
+      <div class="px-6 py-4 border-t border-purple-700">
+        <button
+          id="master-notification-toggle"
+          class="flex justify-center items-center w-full py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 font-medium"
+        >
+          <i class="fas fa-bell mr-2"></i>
+          <span>Notifikasi: Aktif</span>
+        </button>
+      </div>
+
       <div class="px-6 py-4 border-t border-purple-700 absolute bottom-0 left-0 right-0">
         <a
           id="logout-btn"
           href="{{ url_for('admin.logout') }}"
           class="flex justify-center items-center w-full py-3 rounded-lg bg-pink-700 text-white hover:bg-red-600 transition-all duration-200 group font-medium"
-          style="**background-color: #A92C5A;**"
+          style="background-color: #A92C5A;"
         >
           <span class="font-medium">Logout</span>
         </a>
@@ -221,25 +228,24 @@
           }
         });
 
-        // LOGIKA UNTUK KONFIRMASI LOGOUT DITAMBAHKAN DI SINI
+        // LOGIKA KONFIRMASI LOGOUT
         const logoutButton = document.getElementById('logout-btn');
         if (logoutButton) {
           logoutButton.addEventListener('click', function (event) {
-            event.preventDefault(); // Mencegah navigasi langsung
-            const logoutUrl = this.href; // Ambil URL dari atribut href
+            event.preventDefault(); 
+            const logoutUrl = this.href; 
 
             Swal.fire({
               title: 'Apakah Anda Yakin?',
               text: 'Anda akan keluar dari sesi admin.',
               icon: 'warning',
               showCancelButton: true,
-              confirmButtonColor: '#d33', // Merah untuk aksi destruktif
-              cancelButtonColor: '#6366f1', // Ungu medium
+              confirmButtonColor: '#d33', 
+              cancelButtonColor: '#6366f1', 
               confirmButtonText: 'Ya, Logout!',
               cancelButtonText: 'Batal',
             }).then((result) => {
               if (result.isConfirmed) {
-                // Arahkan ke URL logout jika dikonfirmasi
                 window.location.href = logoutUrl;
               }
             });
@@ -249,14 +255,43 @@
     </script>
     {% endblock %}
 
-    <!-- 2. TAMBAHKAN SCRIPT PENDENGAR SOCKET.IO DI SINI -->
     <script>
-      // Pastikan 'io' ada (dari library yg dimuat di <head>)
       if (typeof io !== 'undefined') {
-        // 1. Hubungkan ke server
         const socket = io();
 
-        // 2. (Opsional) Cek di console browser apakah koneksi berhasil
+        // --- AWAL: LOGIKA TOMBOL NOTIFIKASI ---
+        const toggleBtn = document.getElementById('master-notification-toggle');
+        let notificationsEnabled = true; 
+
+        // Fungsi untuk memperbarui tampilan tombol
+        function updateToggleButtonUI() {
+          if (notificationsEnabled) {
+            toggleBtn.innerHTML = '<i class="fas fa-bell mr-2"></i><span>Notifikasi: Aktif</span>';
+            toggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+            toggleBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+          } else {
+            toggleBtn.innerHTML = '<i class="fas fa-bell-slash mr-2"></i><span>Notifikasi: Non-aktif</span>';
+            toggleBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            toggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+          }
+        }
+
+        // Ketika tombol diklik, kirim sinyal ke backend
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                socket.emit('toggle_all_notifications');
+            });
+        }
+
+        // Mendengar update status dari backend
+        socket.on('notification_status_update', function(data) {
+          console.log("MENERIMA UPDATE STATUS DARI SERVER:", data);
+          notificationsEnabled = data.enabled;
+          updateToggleButtonUI();
+        });
+        // --- AKHIR LOGIKA TOMBOL ---
+
+
         socket.on('connect', () => {
           console.log('Berhasil terhubung ke server Socket.IO.');
         });
@@ -265,54 +300,48 @@
           console.warn('Koneksi Socket.IO terputus.');
         });
 
-        // 3. INI BAGIAN UTAMA: Mendengarkan event 'notifikasi_baru' dari server
+        // 3. BAGIAN UTAMA: Mendengarkan event 'notifikasi_baru'
         socket.on('notifikasi_baru', (data) => {
           console.log('Menerima Notifikasi Baru:', data);
 
-          // --- INI SATU-SATUNYA KODE YANG ANDA BUTUHKAN ---
+          // --- PERBAIKAN 1: CEK STATUS TOMBOL DULU ---
+          if (!notificationsEnabled) {
+              console.log("Notifikasi diblokir karena tombol OFF.");
+              return; // Berhenti di sini jika tombol mati
+          }
+
           Swal.fire({
-            // Properti dasar toast
             toast: true,
             position: 'top-end',
             showConfirmButton: false,
             timer: 5000,
             timerProgressBar: true,
-
-            // Properti konten
             icon: data.icon || 'warning',
             title: data.title || 'Pelanggaran Terdeteksi!',
             text: data.detail || 'Cek dashboard untuk detail.',
-
-            // --- INI BAGIAN PENTING UNTUK KLIK ---
-
-            // 1. Fungsi 'onClick' bawaan SweetAlert
-            onClick: () => {
-              // Langsung arahkan ke halaman deteksi
-              window.location.href = "{{ url_for('admin.deteksi') }}";
-            },
-
-            // 2. Terapkan CSS 'clickable-toast'
             customClass: {
               popup: 'clickable-toast',
             },
-
-            // 3. Fungsi 'didOpen' untuk timer
+            
+            // --- PERBAIKAN 2: GABUNGKAN SEMUA LOGIC KE SATU didOpen ---
             didOpen: (toast) => {
+              // Logic Timer
               toast.addEventListener('mouseenter', Swal.stopTimer);
               toast.addEventListener('mouseleave', Swal.resumeTimer);
+              
+              // Logic Klik (Redirect hanya terjadi SAAT KLIK)
+              toast.addEventListener('click', () => {
+                 window.location.href = "{{ url_for('admin.deteksi') }}";
+              });
             },
           });
-          // --- AKHIR DARI KODE BARU ---
         });
 
-        // Nanti kita bisa tambahkan kode di sini untuk update ikon lonceng
-        // jika Anda menambahkannya di base.html ini.
       } else {
-        console.error('Socket.IO library gagal dimuat. Notifikasi real-time tidak akan berfungsi.');
+        console.error('Socket.IO library gagal dimuat.');
       }
     </script>
-    <!-- AKHIR DARI BLOK SCRIPT SOCKET.IO -->
-
+    
     {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %}
     <script>
       window.addEventListener('DOMContentLoaded', (event) => {
@@ -329,7 +358,6 @@
     </script>
     {% endif %} {% endwith %}
 
-    <!-- CONTAINER NOTIFIKASI GLOBAL -->
     <div id="global-toast-container" class="fixed top-4 right-4 z-[9999] space-y-3 pointer-events-none"></div>
   </body>
 </html>

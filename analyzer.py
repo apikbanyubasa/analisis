@@ -49,6 +49,9 @@ except ImportError:
 GLOBAL_APP_INSTANCE = None
 # Global Lock untuk mengontrol akses konkuren ke fungsi cleanup
 DB_CLEANUP_LOCK = threading.Lock()
+# --- VARIABEL GLOBAL UNTUK KONTROL NOTIFIKASI ---
+GLOBAL_NOTIFICATION_ENABLED = True
+
 
 
 def set_global_app_instance(app_instance: Flask):
@@ -1002,7 +1005,7 @@ def recognize_plate(frame, vehicle_bbox):
         return "Error"
 
 
-def detect_crowd(tracked_objects, min_crowd_size=5, crowd_radius_threshold=100):
+def detect_crowd(tracked_objects, min_crowd_size=2, crowd_radius_threshold=100):
     """
     Mendeteksi kerumunan dari objek 'person' yang terlacak.
     """
@@ -1094,6 +1097,12 @@ def run_detection_worker(
     thread_name = threading.current_thread().name
     print(f"[{thread_name}] WORKER DIMULAI: Memulai deteksi untuk: {location_name}")
     init_database()
+
+     # ---- TAMBAHKAN 3 BARI INI ----
+    last_odol_notification_time = {}
+    last_parking_notification_time = {}
+    last_crowd_notification_time = {}
+    # ------------------------------
 
     # ----------------------------------------------------------------------
     # 💡 LANGKAH 1: MEMUAT KONFIGURASI DINAMIS DARI DB/DEFAULT
@@ -1277,32 +1286,45 @@ def run_detection_worker(
             # ==========================================================
 
             is_crowd, crowd_ids = detect_crowd(
-                tracked_objects, min_crowd_size=2, crowd_radius_threshold=40
+                tracked_objects, min_crowd_size=5, crowd_radius_threshold=40
             )
             # ... [Kode pelanggaran (crowd, parking, odol)] ...
 
+            # KODE PENGGANTI LENGKAP UNTUK KERUMUNAN
             if is_crowd and not crowd_currently_logged:
+                # ---- TAMBAHKAN LOGIKA WAKTU ----
                 current_time = time.time()
-                first_seen_time = (
-                    tracker.first_seen.get(list(crowd_ids)[0], current_time)
-                    if crowd_ids
-                    else current_time
-                )
-                duration = current_time - first_seen_time
-                save_crowd_detection(location_name, len(crowd_ids), duration)
-                crowd_currently_logged = True
-                try:
-                    socketio.emit(
-                        "notifikasi_baru",
-                        {
-                            "title": "🚨 Kerumunan Terdeteksi!",
-                            "detail": f"Terdeteksi {len(crowd_ids)} orang berkumpul di {location_name}.",
-                            "icon": "warning",
-                            "location": location_name,
-                        },
+                last_notification_time = last_crowd_notification_time.get(location_name, 0)
+                
+                # Hanya kirim notifikasi jika sudah 30 detik sejak notifikasi kerumunan terakhir di lokasi ini
+                if (current_time - last_notification_time) > 30:
+                    print(f"[{thread_name}] DEBUG CROWD TRIGGER (WITH TIME CHECK): Crowd Size {len(crowd_ids)}, Location: {location_name}")
+
+                    first_seen_time = (
+                        tracker.first_seen.get(list(crowd_ids)[0], current_time)
+                        if crowd_ids
+                        else current_time
                     )
-                except Exception as e:
-                    print(f"[{thread_name}] SocketIO emit error (crowd): {e}")
+                    duration = current_time - first_seen_time
+                    save_crowd_detection(location_name, len(crowd_ids), duration)
+                    crowd_currently_logged = True
+                    
+                    # Simpan waktu notifikasi terakhir
+                    last_crowd_notification_time[location_name] = current_time
+
+                    if GLOBAL_NOTIFICATION_ENABLED:
+                        try:
+                            socketio.emit(
+                                "notifikasi_baru",
+                                {
+                                    "title": "🚨 Kerumunan Terdeteksi!",
+                                    "detail": f"Terdeteksi {len(crowd_ids)} orang berkumpul di {location_name}.",
+                                    "icon": "warning",
+                                    "location": location_name,
+                                },
+                            )
+                        except Exception as e:
+                            print(f"[{thread_name}] SocketIO emit error (crowd): {e}")
             elif not is_crowd:
                 crowd_currently_logged = False
 
@@ -1315,39 +1337,48 @@ def run_detection_worker(
                     was_parked = tracker.is_parked.get(obj_id, False)
                     now_parked = parked_duration > 50
 
+                    # KODE PENGGANTI LENGKAP UNTUK PARKIR LIAR
                     if not was_parked and now_parked:
-
                         # --- INTEGRASI BARU: Mendeteksi Plat Saat Parkir Liar Terdeteksi ---
                         detected_plate = (
                             recognize_plate(frame, obj["bbox"])
                             if "plate_number" not in tracker.objects[obj_id]
                             else tracker.objects[obj_id]["plate_number"]
                         )
-                        tracker.objects[obj_id][
-                            "plate_number"
-                        ] = detected_plate  # Simpan plat di memori
+                        tracker.objects[obj_id]["plate_number"] = detected_plate
                         # -----------------------------------------------------------------
 
-                        # Simpan ke DB (Update fungsi save_parking_violation jika kamu mau simpan platnya ke DB)
-                        save_parking_violation(
-                            location_name, obj["class_name"], parked_duration, obj_id
-                        )
+                        # ---- TAMBAHKAN LOGIKA WAKTU ----
+                        current_time = time.time()
+                        last_notification_time = last_parking_notification_time.get(location_name, 0)
+                        
+                        # Hanya kirim notifikasi jika sudah 20 detik sejak notifikasi parkir terakhir di lokasi ini
+                        if (current_time - last_notification_time) > 20:
+                            print(f"[{thread_name}] DEBUG PARKIR TRIGGER (WITH TIME CHECK): Obj ID {obj_id}, Location: {location_name}")
 
-                        session_parking_count += 1
-                        try:
-                            socketio.emit(
-                                "notifikasi_baru",
-                                {
-                                    "title": "🅿️ Parkir Liar Terdeteksi!",
-                                    # Tampilkan Plat di notifikasi Dashboard
-                                    "detail": f'{obj["class_name"]} (Plat: {detected_plate}) parkir liar di {location_name}.',
-                                    "icon": "error",
-                                    "location": location_name,
-                                },
+                            save_parking_violation(
+                                location_name, obj["class_name"], parked_duration, obj_id
                             )
-                        except Exception as e:
-                            print(f"SocketIO error: {e}")
-                    tracker.is_parked[obj_id] = now_parked
+                            session_parking_count += 1
+                            
+                            # Simpan waktu notifikasi terakhir
+                            last_parking_notification_time[location_name] = current_time
+
+                            if GLOBAL_NOTIFICATION_ENABLED:
+                                try:
+                                    socketio.emit(
+                                        "notifikasi_baru",
+                                        {
+                                            "title": "🅿️ Parkir Liar Terdeteksi!",
+                                            "detail": f'{obj["class_name"]} (Plat: {detected_plate}) parkir liar di {location_name}.',
+                                            "icon": "error",
+                                            "location": location_name,
+                                        },
+                                    )
+                                except Exception as e:
+                                    print(f"SocketIO error: {e}")
+                        # ------------------------------------
+                        tracker.is_parked[obj_id] = now_parked
 
                     if obj["class_name"] == "bus":
                         aspect_ratio = obj.get("aspect_ratio", 0)
@@ -1355,26 +1386,39 @@ def run_detection_worker(
                         is_odol = aspect_ratio > 0.8 or area > 10000
                         was_odol_logged = tracker.is_odol_logged.get(obj_id, False)
 
+                        # KODE PENGGANTI LENGKAP UNTUK ODOL
                         if is_odol and not was_odol_logged:
-                            save_odol_detection(
-                                location_name, obj["class_name"], aspect_ratio, area
-                            )
-                            tracker.is_odol_logged[obj_id] = True
-                            session_odol_count += 1
-                            try:
-                                socketio.emit(
-                                    "notifikasi_baru",
-                                    {
-                                        "title": "🚚 Deteksi ODOL!",
-                                        "detail": f'Kendaraan {obj["class_name"]} (ID: {obj_id}) terindikasi ODOL di {location_name}.',
-                                        "icon": "info",
-                                        "location": location_name,
-                                    },
-                                )
-                            except Exception as e:
-                                print(
-                                    f"[{thread_name}] SocketIO emit error (odol): {e}"
-                                )
+                            # ---- TAMBAHKAN LOGIKA WAKTU ----
+                            current_time = time.time()
+                            last_notification_time = last_odol_notification_time.get(location_name, 0)
+                            
+                            # Hanya kirim notifikasi jika sudah 15 detik sejak notifikasi ODOL terakhir di lokasi ini
+                            # KODE YANG SUDAH DIPERBAIKI UNTUK ODOL
+                            if (current_time - last_notification_time) > 15:
+                                print(f"[{thread_name}] DEBUG ODOL TRIGGER (WITH TIME CHECK): Obj ID {obj_id}, Location: {location_name}")
+
+                                save_odol_detection(location_name, obj["class_name"], aspect_ratio, area)
+                                tracker.is_odol_logged[obj_id] = True
+                                session_odol_count += 1
+                                
+                                last_odol_notification_time[location_name] = current_time
+
+                                # ---- TAMBAHKAN KONDISI GLOBAL INI ----
+                                if GLOBAL_NOTIFICATION_ENABLED:
+                                    try:
+                                        socketio.emit(
+                                            "notifikasi_baru",
+                                            {
+                                                "title": "🚚 Deteksi ODOL!",
+                                                "detail": f'Kendaraan {obj["class_name"]} (ID: {obj_id}) terindikasi ODOL di {location_name}.',
+                                                "icon": "info",
+                                                "location": location_name,
+                                            },
+                                        )
+                                    except Exception as e:
+                                        print(
+                                            f"[{thread_name}] SocketIO emit error (odol): {e}"
+                                        )
 
             frame_count += 1
 
