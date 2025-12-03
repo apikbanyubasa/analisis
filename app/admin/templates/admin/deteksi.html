@@ -1,387 +1,479 @@
 {% extends "admin/base.html" %} 
 {% block title %}Monitoring Terpadu{% endblock %} 
-{% block styles %} {% endblock %} 
+{% block styles %} 
+<style>
+  /* Custom Scrollbar untuk tampilan lebih bersih */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #c084fc;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #a855f7;
+  }
+
+  /* Animasi untuk notifikasi baru */
+  @keyframes fade-in-down {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-in-down {
+    animation: fade-in-down 0.3s ease-out;
+  }
+</style>
+{% endblock %} 
+
 {% block page_title %}Monitoring Pelanggaran Terpadu{% endblock %} 
 {% block page_subtitle %}Pantau Kerumunan & Lalu Lintas Secara Real-time{% endblock %} 
-{% block content %}
 
-<div class="h-[calc(100vh-140px)] flex flex-col font-sans overflow-hidden">
+{% block content %}
+<div class="bg-gray-50 font-sans">
   
-  <div class="grid grid-cols-12 gap-6 h-full items-stretch">
+  <div class="p-6">
+    
+    <!-- Grid Container tanpa tinggi tetap, biarkan scroll browser aktif -->
+    <div class="grid grid-cols-12 gap-6">
       
-      <div class="col-span-3 h-full flex flex-col overflow-hidden">
-        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg flex flex-col h-full overflow-hidden">
+      <!-- KOLOM KIRI: Daftar CCTV -->
+      <div class="col-span-3">
+        <!-- Container mengikuti tinggi video + card di tengah -->
+        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden sticky top-6" id="sidebar-left">
           
+          <!-- Header -->
           <div class="p-4 flex-shrink-0 border-b border-gray-100">
             <h2 class="text-base font-bold text-gray-800 flex items-center">
               <i class="fas fa-video text-purple-600 mr-2"></i> Daftar CCTV
             </h2>
           </div>
           
+          <!-- Search Box -->
           <div class="p-3 flex-shrink-0 border-b border-gray-100">
             <div class="relative">
-              <input type="text" id="search-cctv" placeholder="Cari lokasi..." class="w-full py-2 pl-9 pr-4 border border-gray-300 rounded-lg text-sm focus:ring-purple-500 focus:border-purple-500" />
-              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+              <input 
+                type="text" 
+                id="search-cctv" 
+                placeholder="Cari lokasi..." 
+                class="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all" 
+              />
             </div>
           </div>
 
-          <div class="flex-1 overflow-y-auto px-3 py-2 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100">
+          <!-- List CCTV dengan Scroll -->
+          <div class="overflow-y-auto px-3 py-2 custom-scrollbar" id="cctv-scroll-container">
             <div class="space-y-2" id="daftar-kamera">
-              </div>
+              <!-- List kamera akan di-render di sini -->
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="col-span-6 h-full flex flex-col gap-4 overflow-hidden">
-        
-        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl p-3 shadow-lg flex flex-col flex-1 min-h-0 overflow-hidden relative">
+      <!-- KOLOM TENGAH: Video & Card Statistik -->
+      <div class="col-span-6">
+        <!-- Container dengan tinggi natural (aspect ratio) -->
+        <div class="space-y-4" id="video-card-container">
           
-          <div class="flex items-center justify-between mb-2 flex-shrink-0">
-            <h2 class="text-base font-bold text-gray-800 flex items-center truncate" id="judulKamera">
-              <i class="fas fa-camera text-purple-600 mr-2"></i>
-              {% if default_camera %} {{ default_camera.location }} {% else %} Tidak Ada Kamera {% endif %}
-            </h2>
-            <span class="px-2 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-full animate-pulse">LIVE</span>
-          </div>
-          
-          <div class="relative bg-gray-900 rounded-lg overflow-hidden border border-purple-600/20 shadow-inner w-full h-full flex items-center justify-center">
-            {% if default_camera %}
-            <img src="{{ url_for('admin.crowd_video_stream', camera_id=default_camera.id) }}" alt="Live Stream" class="w-full h-full object-contain" id="videoUtama" />
-            {% else %}
-            <div class="text-center">
-              <img src="{{ url_for('static', filename='img/cam_dead.svg') }}" alt="Mati" class="w-16 h-16 mx-auto mb-2 opacity-50" />
-              <p class="text-gray-400 text-xs">Pilih kamera</p>
+          <!-- Video Container -->
+          <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl p-3 shadow-lg">
+            
+            <!-- Header Video -->
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-800 flex items-center truncate" id="judulKamera">
+                <i class="fas fa-camera text-purple-600 mr-2"></i>
+                {% if default_camera %} 
+                  {{ default_camera.lokasi }} 
+                {% else %} 
+                  Tidak Ada Kamera 
+                {% endif %}
+              </h2>
+              <span class="px-2 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-full animate-pulse flex-shrink-0">LIVE</span>
             </div>
-            {% endif %}
+            
+            <!-- Video Display Area dengan Aspect Ratio 16:9 -->
+            <div class="relative bg-gray-900 rounded-lg overflow-hidden border border-purple-600/20 shadow-inner aspect-video flex items-center justify-center">
+              {% if default_camera %}
+              <img 
+                src="{{ url_for('admin.crowd_video_stream', camera_id=default_camera.id) }}" 
+                alt="Live Stream" 
+                class="w-full h-full object-contain" 
+                id="videoUtama" 
+              />
+              {% else %}
+              <div class="text-center">
+                <img 
+                  src="{{ url_for('static', filename='img/cam_dead.svg') }}" 
+                  alt="Mati" 
+                  class="w-16 h-16 mx-auto mb-2 opacity-50" 
+                />
+                <p class="text-gray-400 text-xs">Pilih kamera dari daftar</p>
+              </div>
+              {% endif %}
+            </div>
           </div>
-        </div>
 
-        <div class="grid grid-cols-3 gap-3 h-28 flex-shrink-0">
-          
-          <div id="card-kerumunan" class="bg-white border border-purple-100 p-3 rounded-xl shadow-sm flex flex-col justify-center items-center text-center h-full hover:shadow-md transition-shadow">
-              <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mb-1">
-                  <i class="fas fa-users text-sm"></i>
+          <!-- Card Statistik -->
+          <div class="grid grid-cols-3 gap-3">
+            
+            <!-- Card Kerumunan -->
+            <div id="card-kerumunan" class="bg-white border border-purple-100 p-4 rounded-xl shadow-sm flex flex-col justify-center items-center text-center hover:shadow-md transition-all">
+              <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mb-2">
+                <i class="fas fa-users text-sm"></i>
               </div>
               <div class="text-2xl font-bold text-gray-800 leading-none mb-1" id="stat-kerumunan">0</div>
-              <p class="text-[10px] text-gray-500 font-bold uppercase">Kerumunan</p>
-          </div>
+              <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Kerumunan</p>
+            </div>
 
-          <div id="card-parkir" class="bg-white border border-purple-100 p-3 rounded-xl shadow-sm flex flex-col justify-center items-center text-center h-full hover:shadow-md transition-shadow">
-              <div class="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 mb-1">
-                  <i class="fas fa-parking text-sm"></i>
+            <!-- Card Parkir Liar -->
+            <div id="card-parkir" class="bg-white border border-purple-100 p-4 rounded-xl shadow-sm flex flex-col justify-center items-center text-center hover:shadow-md transition-all">
+              <div class="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 mb-2">
+                <i class="fas fa-parking text-sm"></i>
               </div>
               <div class="text-2xl font-bold text-gray-800 leading-none mb-1" id="stat-parkir">0</div>
-              <p class="text-[10px] text-gray-500 font-bold uppercase">Parkir Liar</p>
-          </div>
+              <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Parkir Liar</p>
+            </div>
 
-          <div id="card-odol" class="bg-white border border-purple-100 p-3 rounded-xl shadow-sm flex flex-col justify-center items-center text-center h-full hover:shadow-md transition-shadow">
-              <div class="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-1">
-                  <i class="fas fa-truck-moving text-sm"></i>
+            <!-- Card ODOL -->
+            <div id="card-odol" class="bg-white border border-purple-100 p-4 rounded-xl shadow-sm flex flex-col justify-center items-center text-center hover:shadow-md transition-all">
+              <div class="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 mb-2">
+                <i class="fas fa-truck-moving text-sm"></i>
               </div>
               <div class="text-2xl font-bold text-gray-800 leading-none mb-1" id="stat-odol">0</div>
-              <p class="text-[10px] text-gray-500 font-bold uppercase">ODOL</p>
-          </div>
+              <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide">ODOL</p>
+            </div>
 
+          </div>
         </div>
       </div>
 
-      <div class="col-span-3 h-full flex flex-col overflow-hidden">
-        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg flex flex-col h-full overflow-hidden">
+      <!-- KOLOM KANAN: Log Notifikasi -->
+      <div class="col-span-3">
+        <!-- Container mengikuti tinggi video + card di tengah -->
+        <div class="bg-white/95 backdrop-blur-[10px] border border-purple-600/10 rounded-xl shadow-lg overflow-hidden sticky top-6" id="sidebar-right">
           
+          <!-- Header Notifikasi -->
           <div class="p-4 flex-shrink-0 border-b border-gray-100 bg-purple-50/30">
             <h2 class="text-base font-bold text-gray-800 flex items-center justify-between">
-              <span><i class="fas fa-bell text-purple-600 mr-2"></i> Log Pelanggaran</span>
+              <span>
+                <i class="fas fa-bell text-purple-600 mr-2"></i> Log Pelanggaran
+              </span>
               <span class="flex h-2 w-2 relative">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
             </h2>
           </div>
 
-          <div class="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin scrollbar-thumb-purple-300 scrollbar-track-gray-100 bg-gray-50/20">
+          <!-- List Notifikasi dengan Scroll -->
+          <div class="overflow-y-auto px-3 py-3 custom-scrollbar bg-gray-50/20" id="notif-scroll-container">
             <div class="space-y-2" id="daftarNotifikasi">
-               <div class="text-center mt-20 text-gray-400 text-xs italic" id="empty-log">
-                  Belum ada pelanggaran
-               </div>
+              <div class="text-center mt-20 text-gray-400 text-xs italic" id="empty-log">
+                Belum ada pelanggaran terdeteksi
+              </div>
             </div>
           </div>
 
         </div>
       </div>
 
+    </div>
   </div>
 </div>
 
-  <script>
-        // ========== KONFIGURASI ==========
-        {% if default_camera %}
-        let ACTIVE_CAMERA_ID = {{ default_camera.id }};
-        let ACTIVE_LOCATION = "{{ default_camera.lokasi }}";
-        {% else %}
-        let ACTIVE_CAMERA_ID = null;
-        let ACTIVE_LOCATION = "Tidak Ada Kamera";
-        {% endif %}
+<script>
+  // ========== KONFIGURASI ==========
+  {% if default_camera %}
+  let ACTIVE_CAMERA_ID = {{ default_camera.id }};
+  let ACTIVE_LOCATION = "{{ default_camera.lokasi }}";
+  {% else %}
+  let ACTIVE_CAMERA_ID = null;
+  let ACTIVE_LOCATION = "Tidak Ada Kamera";
+  {% endif %}
+  
+  let detectionActive = ACTIVE_CAMERA_ID !== null;
+  let cameraListGlobal = []; 
+
+  // URL Default (Menggunakan stream crowd sebagai base visual)
+  const BASE_STREAM_URL = "{{ url_for('admin.crowd_video_stream', camera_id=-1) }}".replace('-1', '');
+
+  // ========== SOCKET.IO INTEGRATION ==========
+  if (typeof io !== 'undefined') {
+    const socketDeteksi = io(); 
+
+    socketDeteksi.on('notifikasi_baru', function(data) {
+      console.log("[MONITORING] Notifikasi Masuk:", data);
+      
+      // 1. Tulis ke Log (Kanan)
+      addLogNotification(data);
+      
+      // 2. Update Statistik di Card (Bawah Tengah) secara Real-time
+      updateCardStatsFromSocket(data);
+    });
+  }
+
+  // ========== FUNGSI UPDATE CARD DARI SOCKET ==========
+  function updateCardStatsFromSocket(data) {
+    const title = data.title.toLowerCase();
+    const detail = data.detail ? data.detail.toLowerCase() : "";
+
+    // --- LOGIKA KERUMUNAN ---
+    if (title.includes('kerumunan')) {
+      const el = document.getElementById('stat-kerumunan');
+      if (data.people_count !== undefined) {
+        animateValue(el, data.people_count);
+      }
+      highlightCard('card-kerumunan');
+    }
+    
+    // --- LOGIKA PARKIR LIAR ---
+    else if (title.includes('parkir') || detail.includes('parkir')) {
+      const el = document.getElementById('stat-parkir');
+      let currentVal = parseInt(el.innerText) || 0;
+      animateValue(el, currentVal + 1);
+      highlightCard('card-parkir');
+    }
+
+    // --- LOGIKA ODOL ---
+    else if (title.includes('odol') || detail.includes('odol')) {
+      const el = document.getElementById('stat-odol');
+      let currentVal = parseInt(el.innerText) || 0;
+      animateValue(el, currentVal + 1);
+      highlightCard('card-odol');
+    }
+  }
+
+  // Fungsi efek visual (Kedip) pada card
+  function highlightCard(cardId) {
+    const card = document.getElementById(cardId);
+    if(card) {
+      card.classList.add('ring-2', 'ring-red-400', 'bg-red-50');
+      setTimeout(() => {
+        card.classList.remove('ring-2', 'ring-red-400', 'bg-red-50');
+      }, 500);
+    }
+  }
+
+  // Fungsi animasi angka berubah
+  function animateValue(element, newValue) {
+    element.style.transform = "scale(1.2)";
+    element.style.color = "#d946ef"; // Purple-500
+    setTimeout(() => {
+      element.innerText = newValue;
+      element.style.transform = "scale(1)";
+      element.style.color = "#1f2937"; // Gray-800
+    }, 150);
+  }
+
+  // ========== FUNGSI LOGIC NOTIFIKASI (LOG) ==========
+  function addLogNotification(notification) {
+    const logContainer = document.getElementById('daftarNotifikasi');
+    const emptyLogMsg = document.getElementById('empty-log');
+    
+    if (!logContainer) return;
+    if (emptyLogMsg) emptyLogMsg.style.display = 'none';
+
+    const notifEl = document.createElement('div');
+    
+    let borderClass = 'border-red-500';
+    let bgClass = 'bg-red-50';
+    let iconClass = notification.icon || 'fa-exclamation-circle';
+
+    // Styling Card Notifikasi
+    notifEl.className = `flex items-start gap-3 p-3 ${bgClass} hover:bg-white rounded-lg border-l-4 ${borderClass} shadow-sm transition-all animate-fade-in-down border border-gray-100`;
+    
+    const waktu = new Date().toLocaleTimeString('id-ID');
+    
+    notifEl.innerHTML = `
+      <div class="flex-shrink-0 mt-1">
+        <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-red-500 shadow-sm">
+          <i class="fas ${iconClass}"></i>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-gray-800 leading-tight">${notification.title}</p>
+        <p class="text-xs text-gray-600 mt-1 break-words">${notification.detail || notification.location}</p>
+        <div class="mt-2 flex items-center justify-between">
+          <span class="text-[10px] text-gray-400 bg-white px-2 py-0.5 rounded border border-gray-200">
+            <i class="far fa-clock mr-1"></i> ${waktu}
+          </span>
+          <button class="text-xs text-purple-600 hover:text-purple-800 font-medium px-2 py-1 rounded hover:bg-purple-50 transition-colors btn-ok">
+            <i class="fas fa-check mr-1"></i> OK
+          </button>
+        </div>
+      </div>
+    `;
+    
+    logContainer.prepend(notifEl);
+
+    const dismissButton = notifEl.querySelector('.btn-ok');
+    if (dismissButton) {
+      dismissButton.addEventListener('click', function () {
+        notifEl.style.opacity = '0';
+        notifEl.style.transform = 'translateX(20px)';
+        setTimeout(() => {
+          notifEl.remove();
+          if(logContainer.children.length === 0 || (logContainer.children.length === 1 && emptyLogMsg.style.display !== 'none')) {
+            if(emptyLogMsg) emptyLogMsg.style.display = 'block';
+          }
+        }, 300);
+      });
+    }
+
+    // Batasi notifikasi maksimal 50
+    if (logContainer.children.length > 50) {
+      logContainer.removeChild(logContainer.lastChild);
+    }
+  }
+
+  // ========== FUNGSI CCTV & RENDER ==========
+  function selectCamera(cameraId, location) {
+    ACTIVE_CAMERA_ID = cameraId;
+    ACTIVE_LOCATION = location;
+    detectionActive = true;
+
+    const judulEl = document.getElementById('judulKamera');
+    if (judulEl) judulEl.innerHTML = `<i class="fas fa-camera text-purple-600 mr-2"></i> ${location}`;
+
+    const video = document.getElementById('videoUtama');
+    if (video) {
+      const newSrc = BASE_STREAM_URL + cameraId;
+      video.src = newSrc;
+    }
+    
+    renderCameraList(cameraListGlobal);
+    updateAllStats();
+  }
+
+  function renderCameraList(list) {
+    const container = document.getElementById('daftar-kamera');
+    if (!container) return;
+
+    container.innerHTML = '';
+    
+    if(list.length === 0) {
+      container.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">Tidak ada kamera ditemukan.</p>';
+      return;
+    }
+
+    list.forEach(cam => {
+      const el = document.createElement('div');
+      const isActive = cam.id === ACTIVE_CAMERA_ID;
+      
+      const baseClass = "p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md flex items-center justify-between";
+      const activeClass = isActive 
+        ? "bg-purple-600 border-purple-600 text-white shadow-lg transform scale-[1.02]" 
+        : "bg-white border-purple-100 text-gray-700 hover:border-purple-300 hover:bg-purple-50";
+
+      el.className = `${baseClass} ${activeClass}`;
+      
+      el.onclick = () => selectCamera(cam.id, cam.lokasi);
+
+      el.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="${isActive ? 'text-white' : 'text-purple-500'}">
+            <i class="fas fa-video"></i>
+          </div>
+          <div>
+            <p class="font-bold text-sm ${isActive ? 'text-white' : 'text-gray-800'}">${cam.lokasi}</p>
+            <p class="text-[10px] ${isActive ? 'text-purple-200' : 'text-gray-500'} uppercase tracking-wider">${cam.type || 'CCTV'}</p>
+          </div>
+        </div>
+        <div class="flex items-center">
+          <div class="h-2 w-2 rounded-full ${isActive ? 'bg-green-300' : 'bg-green-500'} animate-pulse"></div>
+        </div>
+      `;
+      container.appendChild(el);
+    });
+  }
+
+  function loadCameraData() {
+    fetch('/admin/api/crowd/cameras')
+      .then(r => r.json())
+      .then(data => {
+        cameraListGlobal = data.cameras || [];
+        renderCameraList(cameraListGlobal);
+      })
+      .catch(err => console.error('Gagal memuat kamera:', err));
+  }
+
+  // ========== LOOP UPDATE STATISTIK (Backend Polling) ==========
+  function updateAllStats() {
+    if (!detectionActive || ACTIVE_CAMERA_ID === null) return;
+
+    // 1. Ambil Data Kerumunan (Angka Real-time)
+    fetch(`/admin/api/crowd/stats/${ACTIVE_CAMERA_ID}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.status === 'active') {
+          document.getElementById('stat-kerumunan').innerText = data.people_count || 0;
+        }
+      }).catch(e => console.log("Crowd stat error", e));
+
+    // 2. Ambil Data Pelanggaran Lalu Lintas (TIDAK UPDATE OTOMATIS, HANYA VIA SOCKET)
+    // Data parkir dan ODOL hanya update ketika ada notifikasi baru dari socket
+  }
+
+  // Search functionality
+  document.getElementById('search-cctv').addEventListener('input', function(e) {
+    const term = e.target.value.toLowerCase();
+    const filtered = cameraListGlobal.filter(c => c.lokasi.toLowerCase().includes(term));
+    renderCameraList(filtered);
+  });
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', function () {
+    loadCameraData();
+
+    if (detectionActive) {
+      setInterval(updateAllStats, 5000);
+      updateAllStats();
+    }
+
+    // ========== FUNGSI UNTUK MENYAMAKAN TINGGI SIDEBAR DENGAN VIDEO + CARD ==========
+    function syncSidebarHeight() {
+      const videoCardContainer = document.getElementById('video-card-container');
+      const sidebarLeft = document.getElementById('sidebar-left');
+      const sidebarRight = document.getElementById('sidebar-right');
+      const cctvScrollContainer = document.getElementById('cctv-scroll-container');
+      const notifScrollContainer = document.getElementById('notif-scroll-container');
+
+      if (videoCardContainer && sidebarLeft && sidebarRight) {
+        // Ambil tinggi dari video + card container
+        const targetHeight = videoCardContainer.offsetHeight;
         
-        let detectionActive = ACTIVE_CAMERA_ID !== null;
-        let cameraListGlobal = []; 
+        // Set tinggi sidebar sama dengan video + card
+        sidebarLeft.style.height = targetHeight + 'px';
+        sidebarRight.style.height = targetHeight + 'px';
 
-        // URL Default (Menggunakan stream crowd sebagai base visual)
-        const BASE_STREAM_URL = "{{ url_for('admin.crowd_video_stream', camera_id=-1) }}".replace('-1', '');
+        // Set tinggi scroll container (dikurangi header)
+        // Sidebar kiri: header (65px) + search (57px) = 122px
+        cctvScrollContainer.style.height = (targetHeight - 140) + 'px';
+        
+        // Sidebar kanan: header (70px)
+        notifScrollContainer.style.height = (targetHeight - 70) + 'px';
+      }
+    }
 
-        // ========== SOCKET.IO INTEGRATION ==========
-        if (typeof io !== 'undefined') {
-            const socketDeteksi = io(); 
+    // Jalankan saat halaman load
+    syncSidebarHeight();
 
-            socketDeteksi.on('notifikasi_baru', function(data) {
-                console.log("[MONITORING] Notifikasi Masuk:", data);
-                
-                // 1. Tulis ke Log (Kanan)
-                addLogNotification(data);
-                
-                // 2. PERBAIKAN: Update Statistik di Card (Bawah Tengah) secara Real-time
-                updateCardStatsFromSocket(data);
-            });
-        }
+    // Jalankan saat window resize
+    window.addEventListener('resize', syncSidebarHeight);
 
-        // ========== FUNGSI UPDATE CARD DARI SOCKET (BARU) ==========
-        function updateCardStatsFromSocket(data) {
-            const title = data.title.toLowerCase();
-            const detail = data.detail ? data.detail.toLowerCase() : "";
+    // Jalankan setelah gambar/video selesai load
+    window.addEventListener('load', syncSidebarHeight);
+  });
+</script>
 
-            // --- LOGIKA KERUMUNAN ---
-            if (title.includes('kerumunan')) {
-                const el = document.getElementById('stat-kerumunan');
-                // Jika data socket membawa jumlah orang (people_count), pakai itu. 
-                // Jika tidak, kita bisa fetch ulang atau biarkan API polling yang handle.
-                if (data.people_count !== undefined) {
-                     animateValue(el, data.people_count);
-                }
-            }
-            
-            // --- LOGIKA PARKIR LIAR ---
-            else if (title.includes('parkir') || detail.includes('parkir')) {
-                const el = document.getElementById('stat-parkir');
-                let currentVal = parseInt(el.innerText) || 0;
-                // Tambah 1 setiap ada notifikasi parkir baru
-                animateValue(el, currentVal + 1);
-                highlightCard('card-parkir');
-            }
-
-            // --- LOGIKA ODOL ---
-            else if (title.includes('odol') || detail.includes('odol')) {
-                const el = document.getElementById('stat-odol');
-                let currentVal = parseInt(el.innerText) || 0;
-                // Tambah 1 setiap ada notifikasi ODOL baru
-                animateValue(el, currentVal + 1);
-                highlightCard('card-odol');
-            }
-        }
-
-        // Fungsi efek visual (Kedip) pada card
-        function highlightCard(cardId) {
-            const card = document.getElementById(cardId);
-            if(card) {
-                card.classList.add('ring-2', 'ring-red-400', 'bg-red-50');
-                setTimeout(() => {
-                    card.classList.remove('ring-2', 'ring-red-400', 'bg-red-50');
-                }, 500);
-            }
-        }
-
-        // Fungsi animasi angka berubah
-        function animateValue(element, newValue) {
-            element.style.transform = "scale(1.2)";
-            element.style.color = "#d946ef"; // Purple-500
-            setTimeout(() => {
-                element.innerText = newValue;
-                element.style.transform = "scale(1)";
-                element.style.color = "#1f2937"; // Gray-800
-            }, 150);
-        }
-
-        // ========== FUNGSI LOGIC NOTIFIKASI (LOG) ==========
-        function addLogNotification(notification) {
-          const logContainer = document.getElementById('daftarNotifikasi');
-          const emptyLogMsg = document.getElementById('empty-log');
-          
-          if (!logContainer) return;
-          if (emptyLogMsg) emptyLogMsg.style.display = 'none';
-
-          const notifEl = document.createElement('div');
-          
-          let borderClass = 'border-red-500';
-          let bgClass = 'bg-red-50';
-          let iconClass = notification.icon || 'fa-exclamation-circle';
-
-          // Styling Card Notifikasi
-          notifEl.className = `flex items-start gap-3 p-3 ${bgClass} hover:bg-white rounded-lg border-l-4 ${borderClass} shadow-sm transition-all animate-fade-in-down border border-gray-100`;
-          
-          const waktu = new Date().toLocaleTimeString('id-ID');
-          
-          notifEl.innerHTML = `
-                <div class="flex-shrink-0 mt-1">
-                    <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-red-500 shadow-sm">
-                        <i class="fas ${iconClass}"></i>
-                    </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-bold text-gray-800 leading-tight">${notification.title}</p>
-                    <p class="text-xs text-gray-600 mt-1 break-words">${notification.detail || notification.location}</p>
-                    <div class="mt-2 flex items-center justify-between">
-                        <span class="text-[10px] text-gray-400 bg-white px-2 py-0.5 rounded border border-gray-200">
-                            <i class="far fa-clock mr-1"></i> ${waktu}
-                        </span>
-                        <button class="text-xs text-purple-600 hover:text-purple-800 font-medium px-2 py-1 rounded hover:bg-purple-50 transition-colors btn-ok">
-                            <i class="fas fa-check mr-1"></i> OK
-                        </button>
-                    </div>
-                </div>
-            `;
-          
-          logContainer.prepend(notifEl);
-
-          const dismissButton = notifEl.querySelector('.btn-ok');
-          if (dismissButton) {
-            dismissButton.addEventListener('click', function () {
-              notifEl.style.opacity = '0';
-              notifEl.style.transform = 'translateX(20px)';
-              setTimeout(() => {
-                  notifEl.remove();
-                  if(logContainer.children.length === 0 || (logContainer.children.length === 1 && emptyLogMsg.style.display !== 'none')) {
-                      if(emptyLogMsg) emptyLogMsg.style.display = 'block';
-                  }
-              }, 300);
-            });
-          }
-
-          if (logContainer.children.length > 50) {
-            logContainer.removeChild(logContainer.lastChild);
-          }
-        }
-
-        // ========== FUNGSI CCTV & RENDER ==========
-        function selectCamera(cameraId, location) {
-          ACTIVE_CAMERA_ID = cameraId;
-          ACTIVE_LOCATION = location;
-          detectionActive = true;
-
-          const judulEl = document.getElementById('judulKamera');
-          if (judulEl) judulEl.innerHTML = `<i class="fas fa-camera text-purple-600 mr-2"></i> ${location}`;
-
-          const video = document.getElementById('videoUtama');
-          if (video) {
-            const newSrc = BASE_STREAM_URL + cameraId;
-            video.src = newSrc;
-          }
-          
-          renderCameraList(cameraListGlobal);
-          
-          // Reset statistik saat ganti kamera (Opsional, tergantung kebutuhan)
-          // document.getElementById('stat-kerumunan').innerText = "0";
-          // document.getElementById('stat-parkir').innerText = "0";
-          // document.getElementById('stat-odol').innerText = "0";
-          
-          // Trigger update manual agar data langsung sinkron
-          updateAllStats();
-        }
-
-        function renderCameraList(list) {
-          const container = document.getElementById('daftar-kamera');
-          if (!container) return;
-
-          container.innerHTML = '';
-          
-          if(list.length === 0) {
-              container.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">Tidak ada kamera ditemukan.</p>';
-              return;
-          }
-
-          list.forEach(cam => {
-            const el = document.createElement('div');
-            const isActive = cam.id === ACTIVE_CAMERA_ID;
-            
-            const baseClass = "p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md flex items-center justify-between group";
-            const activeClass = isActive 
-                ? "bg-purple-600 border-purple-600 text-white shadow-lg transform scale-[1.02]" 
-                : "bg-white border-purple-100 text-gray-700 hover:border-purple-300 hover:bg-purple-50";
-
-            el.className = `${baseClass} ${activeClass}`;
-            
-            el.onclick = () => selectCamera(cam.id, cam.lokasi);
-
-            el.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <div class="${isActive ? 'text-white' : 'text-purple-500'}">
-                        <i class="fas fa-video"></i>
-                    </div>
-                    <div>
-                        <p class="font-bold text-sm ${isActive ? 'text-white' : 'text-gray-800'}">${cam.lokasi}</p>
-                        <p class="text-[10px] ${isActive ? 'text-purple-200' : 'text-gray-500'} uppercase tracking-wider">${cam.type || 'CCTV'}</p>
-                    </div>
-                </div>
-                <div class="flex items-center">
-                    <div class="h-2 w-2 rounded-full ${isActive ? 'bg-green-300' : 'bg-green-500'} animate-pulse"></div>
-                </div>
-            `;
-            container.appendChild(el);
-          });
-        }
-
-        function loadCameraData() {
-          fetch('/admin/api/crowd/cameras')
-            .then(r => r.json())
-            .then(data => {
-              cameraListGlobal = data.cameras || [];
-              renderCameraList(cameraListGlobal);
-            })
-            .catch(err => console.error('Gagal memuat kamera:', err));
-        }
-
-        // ========== LOOP UPDATE STATISTIK (Backend Polling) ==========
-        function updateAllStats() {
-          if (!detectionActive || ACTIVE_CAMERA_ID === null) return;
-
-          // 1. Ambil Data Kerumunan (Angka Real-time)
-          fetch(`/admin/api/crowd/stats/${ACTIVE_CAMERA_ID}`)
-            .then(r => r.json())
-            .then(data => {
-              if (data && data.status === 'active') {
-                document.getElementById('stat-kerumunan').innerText = data.people_count || 0;
-              }
-            }).catch(e => console.log("Crowd stat error", e));
-
-          // 2. Ambil Data Pelanggaran Lalu Lintas (Sinkronisasi Data)
-          // Ini penting agar kalau di-refresh angkanya tetap benar dari database
-          Promise.all([
-             fetch('/admin/api/parking_violations').then(r => r.json()),
-             fetch('/admin/api/odol_detections').then(r => r.json())
-          ]).then(([parkingData, odolData]) => {
-             // Opsional: Anda bisa memilih untuk tidak menimpa jika ingin efek counter berjalan terus
-             // Tapi sebaiknya disinkronkan.
-             const totalParkir = Array.isArray(parkingData) ? parkingData.length : 0;
-             const totalOdol = Array.isArray(odolData) ? odolData.length : 0;
-             
-             // Update hanya jika berbeda drastis (opsional logic)
-             // document.getElementById('stat-parkir').innerText = totalParkir;
-             // document.getElementById('stat-odol').innerText = totalOdol;
-          }).catch(e => console.log("Traffic stat error", e));
-        }
-
-        document.getElementById('search-cctv').addEventListener('input', function(e) {
-            const term = e.target.value.toLowerCase();
-            const filtered = cameraListGlobal.filter(c => c.lokasi.toLowerCase().includes(term));
-            renderCameraList(filtered);
-        });
-
-        document.addEventListener('DOMContentLoaded', function () {
-          loadCameraData();
-
-          if (detectionActive) {
-            // Polling tetap jalan untuk sinkronisasi, tapi card juga update via socket
-            setInterval(updateAllStats, 5000); // Diperlambat jadi 5 detik agar tidak spam API
-            updateAllStats();
-          }
-        });
-  </script>
-</div>
 {% endblock %}
