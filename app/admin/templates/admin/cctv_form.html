@@ -1,64 +1,90 @@
-{% extends "admin/base.html" %}
-
-{% block title %}{{ title }} - Admin{% endblock %}
-{% block page_title %}{{ title }}{% endblock %}
-{% block page_subtitle %}Isi detail data CCTV di bawah ini{% endblock %}
-
-{% block content %}
+{% extends "admin/base.html" %} {% block content %}
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <form method="POST" action="">
-        
-        {{ form.hidden_tag() }}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                {{ form.lokasi.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.lokasi(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500") }}
-            </div>
-            <div>
-                {{ form.status.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.status(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500") }}
-            </div>
-        </div>
+  <form method="POST" action="">
+    {{ form.hidden_tag() }}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div>
+        {{ form.lokasi.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{ form.lokasi(class="w-full px-4
+        py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500" ~ (' border-red-500' if
+        form.lokasi.errors else '')) }} {# 💡 PERBAIKAN: Tampilkan error #} {% for error in form.lokasi.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        {{ form.status.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{ form.status(class="w-full px-4
+        py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500" ~ (' border-red-500' if
+        form.status.errors else '')) }} {# 💡 PERBAIKAN: Tampilkan error #} {% for error in form.status.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                {{ form.latitude.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.latitude(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500", step="any") }}
-            </div>
-            <div>
-                {{ form.longitude.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.longitude(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500", step="any") }}
-            </div>
-        </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div>
+        {{ form.latitude.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{ form.latitude(class="w-full
+        px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500" ~ (' border-red-500'
+        if form.latitude.errors else ''), step="any") }} {# 💡 PERBAIKAN: Tampilkan error #} {% for error in
+        form.latitude.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        {{ form.longitude.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{ form.longitude(class="w-full
+        px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500" ~ (' border-red-500'
+        if form.longitude.errors else ''), step="any") }} {# 💡 PERBAIKAN: Tampilkan error #} {% for error in
+        form.longitude.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                {{ form.video_url.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.video_url(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500") }}
-            </div>
-            <div>
-                {{ form.camera_type.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.camera_type(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500") }}
-            </div>
-        </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div>
+        {{ form.video_url.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{ form.video_url(class="w-full
+        px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500" ~ (' border-red-500'
+        if form.video_url.errors else '')) }} {# 💡 PERBAIKAN: Tampilkan error #} {% for error in form.video_url.errors
+        %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        {{ form.camera_type.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{
+        form.camera_type(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500
+        focus:border-purple-500" ~ (' border-red-500' if form.camera_type.errors else '')) }} {# 💡 PERBAIKAN: Tampilkan
+        error #} {% for error in form.camera_type.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                {{ form.stream_url.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.stream_url(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500") }}
-            </div>
-            <div>
-                {{ form.tipe_lokasi.label(class="block text-sm font-medium text-gray-700 mb-1") }}
-                {{ form.tipe_lokasi(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500") }}
-            </div>
-        </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div>
+        {{ form.stream_url.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{
+        form.stream_url(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500
+        focus:border-purple-500" ~ (' border-red-500' if form.stream_url.errors else '')) }} {# 💡 PERBAIKAN: Tampilkan
+        error #} {% for error in form.stream_url.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        {{ form.tipe_lokasi.label(class="block text-sm font-medium text-gray-700 mb-1") }} {{
+        form.tipe_lokasi(class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-purple-500
+        focus:border-purple-500" ~ (' border-red-500' if form.tipe_lokasi.errors else '')) }} {# 💡 PERBAIKAN: Tampilkan
+        error #} {% for error in form.tipe_lokasi.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
 
-        <div class="flex justify-end space-x-4 mt-8">
-            <a href="{{ url_for('admin.cctv') }}" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-                Batal
-            </a>
-            {{ form.submit(class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors") }}
-        </div>
-    </form>
+    <div class="flex justify-end space-x-4 mt-8">
+      <a
+        href="{{ url_for('admin.cctv') }}"
+        class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+      >
+        Batal
+      </a>
+      {{ form.submit(class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors") }}
+    </div>
+  </form>
 </div>
 {% endblock %}

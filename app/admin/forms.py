@@ -15,6 +15,8 @@ from wtforms.validators import (
     EqualTo,
     ValidationError,
     Optional,
+    URL,
+    NumberRange,
 )
 from ..models import User
 from flask_login import current_user
@@ -146,17 +148,44 @@ class VerifyOtpForm(FlaskForm):
 class CCTVForm(FlaskForm):
     """Form untuk menambah dan mengedit data CCTV."""
 
-    lokasi = StringField("Lokasi", validators=[DataRequired()])
+    # 💡 LOKASI: Wajib diisi
+    lokasi = StringField(
+        "Lokasi", validators=[DataRequired(message="Nama lokasi wajib diisi.")]
+    )
+
+    # 💡 STATUS: Wajib diisi
     status = SelectField(
         "Status",
         choices=[("Aktif", "Aktif"), ("Tidak Aktif", "Tidak Aktif")],
-        validators=[DataRequired()],
+        validators=[DataRequired(message="Status wajib dipilih.")],
     )
-    latitude = FloatField("Latitude", validators=[Optional()])
-    longitude = FloatField("Longitude", validators=[Optional()])
-    video_url = StringField("Video URL (html)", validators=[Optional()])
+
+    # 💡 LATITUDE/LONGITUDE: Opsional, tapi harus numerik jika diisi
+    latitude = FloatField(
+        "Latitude",
+        validators=[Optional(), NumberRange(message="Nilai harus berupa angka.")],
+        # Anda bisa menambahkan batasan NumberRange(min=-90, max=90) jika perlu
+    )
+    longitude = FloatField(
+        "Longitude",
+        validators=[Optional(), NumberRange(message="Nilai harus berupa angka.")],
+    )
+
+    # 💡 VIDEO_URL: Opsional, tapi jika diisi harus URL
+    # Anda mungkin perlu membuat Custom Validator untuk URL jika wtforms.validators.URL tidak sesuai
+    video_url = StringField(
+        "Video URL (html)",
+        validators=[Optional(), URL(message="Format URL tidak valid.")],
+    )
+
     camera_type = StringField("Tipe Kamera", validators=[Optional()])
-    stream_url = StringField("Stream URL (m3u8)", validators=[Optional()])
+
+    # 💡 STREAM_URL: Wajib diisi. Formatnya bisa RTSP atau M3U8, gunakan DataRequired saja
+    stream_url = StringField(
+        "Stream URL (m3u8/rtsp)",
+        validators=[DataRequired(message="Stream URL wajib diisi.")],
+        # Hapus validator URL jika URL yang diinput adalah RTSP yang tidak dikenali sebagai URL standar
+    )
 
     tipe_lokasi = SelectField(
         "Tipe Lokasi",

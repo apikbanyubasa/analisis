@@ -16,7 +16,7 @@ from analyzer import (
     LOCATION_TRACKERS,
     reset_location_data,
     GLOBAL_TRACKED_OBJECTS,  # Variabel global baru untuk data kecepatan per lokasi
-    GLOBAL_NOTIFICATION_ENABLED, 
+    GLOBAL_NOTIFICATION_ENABLED,
 )
 from flask import (
     Blueprint,
@@ -34,6 +34,7 @@ from flask import (
 
 # --- TAMBAHKAN BARIS INI ---
 from .. import socketio
+
 # ---------------------------
 
 from flask_login import login_user, logout_user, login_required, current_user
@@ -45,9 +46,9 @@ from ..models import (
     BatasWilayah,
     Kontak,
     Dispatch,
-    ParkingViolation,  
-    OdolDetection,     
-    CrowdDetection,    
+    ParkingViolation,
+    OdolDetection,
+    CrowdDetection,
     CountingData,
 )
 from .forms import (
@@ -584,21 +585,77 @@ def add_cctv():
         "admin/cctv_form.html", action="add", form=form, title="Tambah CCTV"
     )
 
-
 @admin_bp.route("/cctv/edit/<int:cctv_id>", methods=["GET", "POST"])
 @login_required
 @operator_or_admin_required
 def edit_cctv(cctv_id):
     cctv_to_edit = CCTV.query.get_or_404(cctv_id)
     form = CCTVForm(obj=cctv_to_edit)
+
+    # 1. SIMPAN SEMUA KUNCI KRITIS LAMA SEBELUM FORM DI-PROCESS
+    old_location_name = cctv_to_edit.lokasi
+    old_stream_url = cctv_to_edit.stream_url
+    old_line1_y = getattr(cctv_to_edit, "line1_y", None)
+    old_line2_y = getattr(cctv_to_edit, "line2_y", None)
+    old_distance = getattr(cctv_to_edit, "real_distance_m", None)
+
     if request.method == "GET":
+        # Ini memastikan field tipe_lokasi (yang namanya di model adalah 'type') terisi dengan benar saat GET
         form.tipe_lokasi.data = cctv_to_edit.type
+
     if form.validate_on_submit():
+        # 2. UPDATE OBJEK DENGAN DATA BARU DARI FORM
+        # populate_obj mengupdate SEMUA field dari form ke objek cctv_to_edit
         form.populate_obj(cctv_to_edit)
-        cctv_to_edit.type = form.tipe_lokasi.data
+        cctv_to_edit.type = form.tipe_lokasi.data  # Pastikan tipe lokasi terupdate
+
+        # 3. Commit perubahan ke Database (DATA BARU TERSIMPAN DI DB)
         db.session.commit()
+
+        # 4. AMBIL KUNCI BARU SETELAH COMMIT
+        new_location_name = cctv_to_edit.lokasi
+
+        # 5. TENTUKAN APAKAH PERLU RELOAD
+
+        # Kondisi A: Kunci identifikasi (lokasi) berubah?
+        is_location_changed = old_location_name != new_location_name
+
+        # Kondisi B: Konfigurasi stream/analitik berubah?
+        is_config_changed = (
+            old_stream_url != cctv_to_edit.stream_url
+            or old_line1_y != getattr(cctv_to_edit, "line1_y", None)
+            or old_line2_y != getattr(cctv_to_edit, "line2_y", None)
+            or old_distance != getattr(cctv_to_edit, "real_distance_m", None)
+        )
+
+        # 6. LOGIKA PENGHAPUSAN STATE LAMA & RELOAD
+
+        if is_location_changed:
+            # Jika nama lokasi berubah, worker lama masih menulis ke kunci lama.
+            # Hapus state LAMA secara paksa
+            print(
+                f"DEBUG: Lokasi berubah '{old_location_name}' -> '{new_location_name}'. Menghapus state lama."
+            )
+
+            # --- PENGHAPUSAN STATE LAMA DARI MEMORI GLOBAL ---
+            if old_location_name in LATEST_DETECTION_STATS:
+                del LATEST_DETECTION_STATS[old_location_name]
+            if old_location_name in LOCATION_TRACKERS:
+                del LOCATION_TRACKERS[old_location_name]
+            if old_location_name in GLOBAL_TRACKED_OBJECTS:
+                del GLOBAL_TRACKED_OBJECTS[old_location_name]
+            # --------------------------------------------------------
+
+        # Pemicu reload worker JIKA salah satu kondisi berubah
+        if is_location_changed or is_config_changed:
+            print(
+                f"DEBUG: Memicu reload worker. Location Changed: {is_location_changed}, Config Changed: {is_config_changed}"
+            )
+            reload_workers_thread(current_app._get_current_object())
+
         flash("Data CCTV berhasil diperbarui!", "success")
         return redirect(url_for("admin.cctv"))
+
     return render_template(
         "admin/cctv_form.html",
         action="edit",
@@ -1171,19 +1228,23 @@ def get_crowd_stats(camera_id: int):  # <-- Ganti ke camera_id
 
 
 # --- TAMBAHKAN FUNGSI INI UNTUK KONTROL NOTIFIKASI ---
-@socketio.on('toggle_all_notifications')
+@socketio.on("toggle_all_notifications")
 def handle_toggle_all_notifications():
     """
     Menerima sinyal dari frontend untuk membalik status notifikasi global.
     """
     global GLOBAL_NOTIFICATION_ENABLED
     GLOBAL_NOTIFICATION_ENABLED = not GLOBAL_NOTIFICATION_ENABLED
-    
+
     status = "Aktif" if GLOBAL_NOTIFICATION_ENABLED else "Non-aktif"
     print(f"Status notifikasi global diubah menjadi: {status}")
-    
+
     # Kirim status terbaru ke semua klien yang terhubung
-    socketio.emit('notification_status_update', {'enabled': GLOBAL_NOTIFICATION_ENABLED})
+    socketio.emit(
+        "notification_status_update", {"enabled": GLOBAL_NOTIFICATION_ENABLED}
+    )
+
+
 # --- AKHIR FUNGSI ---
 
 
@@ -1240,26 +1301,41 @@ def plate_video_stream(camera_id: int):
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
+
 # Tambahkan ini di routes.py (terpisah dari parking_video_stream)
 
-@admin_bp.route('/api/parking_violations')
+
+@admin_bp.route("/api/parking_violations")
 @login_required
 def api_parking_violations():
     # Ini memberikan DATA JSON untuk statistik & log
     try:
-        data = ParkingViolation.query.order_by(ParkingViolation.timestamp.desc()).limit(20).all()
-        result = [{'id': v.id, 'location': v.location, 'timestamp': v.timestamp.isoformat()} for v in data]
+        data = (
+            ParkingViolation.query.order_by(ParkingViolation.timestamp.desc())
+            .limit(20)
+            .all()
+        )
+        result = [
+            {"id": v.id, "location": v.location, "timestamp": v.timestamp.isoformat()}
+            for v in data
+        ]
         return jsonify(result)
     except:
         return jsonify([])
 
-@admin_bp.route('/api/odol_detections')
+
+@admin_bp.route("/api/odol_detections")
 @login_required
 def api_odol_detections():
     # Ini memberikan DATA JSON untuk statistik & log ODOL
     try:
-        data = OdolDetection.query.order_by(OdolDetection.timestamp.desc()).limit(20).all()
-        result = [{'id': d.id, 'location': d.location, 'timestamp': d.timestamp.isoformat()} for d in data]
+        data = (
+            OdolDetection.query.order_by(OdolDetection.timestamp.desc()).limit(20).all()
+        )
+        result = [
+            {"id": d.id, "location": d.location, "timestamp": d.timestamp.isoformat()}
+            for d in data
+        ]
         return jsonify(result)
     except:
         return jsonify([])
