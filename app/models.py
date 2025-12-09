@@ -9,9 +9,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 class CCTV(db.Model):
     __tablename__ = "cctv"
-    # === PERUBAHAN: id menjadi db.BigInteger ===
+    # PK sudah BIGINT
     id = db.Column(db.BigInteger, primary_key=True)
-    # ==========================================
     lokasi = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(50), default="Aktif")
     latitude = db.Column(db.Float, nullable=True)
@@ -21,16 +20,101 @@ class CCTV(db.Model):
     stream_url = db.Column(db.String(500), nullable=True)
     type = db.Column(db.String(100), nullable=True)
 
-    counting_data_list = db.relationship("CountingData", backref="cctv", lazy=True)
+    # === PERUBAHAN: Tambahkan cascade="all, delete-orphan" di sisi Parent ===
+    counting_data_list = db.relationship("CountingData", backref="cctv", lazy=True, cascade="all, delete-orphan")
     parking_violations_list = db.relationship(
-        "ParkingViolation", backref="cctv", lazy=True
+        "ParkingViolation", backref="cctv", lazy=True, cascade="all, delete-orphan"
     )
-    crowd_detections_list = db.relationship("CrowdDetection", backref="cctv", lazy=True)
-    odol_detections_list = db.relationship("OdolDetection", backref="cctv", lazy=True)
+    crowd_detections_list = db.relationship("CrowdDetection", backref="cctv", lazy=True, cascade="all, delete-orphan")
+    odol_detections_list = db.relationship("OdolDetection", backref="cctv", lazy=True, cascade="all, delete-orphan")
+    # =======================================================================
 
     def __repr__(self):
         return f"<CCTV {self.lokasi}>"
 
+class CountingData(db.Model):
+    __tablename__ = "counting_data"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    # === PERUBAHAN: Tambahkan ondelete="CASCADE" di Foreign Key ===
+    cctv_id = db.Column(
+        db.BigInteger, db.ForeignKey("cctv.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # =============================================================
+
+    counts_jauh_car = db.Column(db.Integer, default=0)
+    counts_jauh_motorcycle = db.Column(db.Integer, default=0)
+    counts_jauh_bus = db.Column(db.Integer, default=0)
+    counts_jauh_truck = db.Column(db.Integer, default=0)
+
+    counts_dekat_car = db.Column(db.Integer, default=0)
+    counts_dekat_motorcycle = db.Column(db.Integer, default=0)
+    counts_dekat_bus = db.Column(db.Integer, default=0)
+    counts_dekat_truck = db.Column(db.Integer, default=0)
+
+    grand_total = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f"<CountingData {self.cctv.lokasi if self.cctv else 'N/A'}@{self.timestamp}>"
+
+
+class ParkingViolation(db.Model):
+    __tablename__ = "parking_violations"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    # === PERUBAHAN: Tambahkan ondelete="CASCADE" di Foreign Key ===
+    cctv_id = db.Column(
+        db.BigInteger, db.ForeignKey("cctv.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # =============================================================
+
+    vehicle_type = db.Column(db.String(50), nullable=False)
+    parked_duration_sec = db.Column(db.Float, nullable=False)
+    object_id = db.Column(db.Integer, nullable=False) 
+
+    def __repr__(self):
+        return f"<ParkingViolation {self.cctv.lokasi if self.cctv else 'N/A'} - {self.vehicle_type}>"
+
+
+class CrowdDetection(db.Model):
+    __tablename__ = "crowd_detections"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    # === PERUBAHAN: Tambahkan ondelete="CASCADE" di Foreign Key ===
+    cctv_id = db.Column(
+        db.BigInteger, db.ForeignKey("cctv.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # =============================================================
+
+    crowd_size = db.Column(db.Integer, nullable=False)
+    duration_sec = db.Column(db.Float, nullable=False)
+
+    def __repr__(self):
+        return f"<CrowdDetection {self.cctv.lokasi if self.cctv else 'N/A'} - {self.crowd_size} people>"
+
+
+class OdolDetection(db.Model):
+    __tablename__ = "odol_detections"
+    id = db.Column(db.BigInteger, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    # === PERUBAHAN: Tambahkan ondelete="CASCADE" di Foreign Key ===
+    cctv_id = db.Column(
+        db.BigInteger, db.ForeignKey("cctv.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # =============================================================
+
+    vehicle_type = db.Column(
+        db.String(50), nullable=False
+    )
+    aspect_ratio = db.Column(db.Float, nullable=False)
+    area = db.Column(db.Float, nullable=False)
+
+    def __repr__(self):
+        return f"<OdolDetection {self.cctv.lokasi if self.cctv else 'N/A'} - {self.vehicle_type}>"
 
 class BatasWilayah(db.Model):
     __tablename__ = "batas_wilayah"
@@ -127,85 +211,3 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f"<User {self.username}>"
 
-
-class CountingData(db.Model):
-    __tablename__ = "counting_data"
-    id = db.Column(db.BigInteger, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-
-    # Foreign Key harus diubah ke BigInteger (karena CCTV.id adalah BigInteger)
-    cctv_id = db.Column(
-        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
-    )
-
-    # Data Total Count (TIDAK ADA YANG DIHAPUS)
-    counts_jauh_car = db.Column(db.Integer, default=0)
-    counts_jauh_motorcycle = db.Column(db.Integer, default=0)
-    counts_jauh_bus = db.Column(db.Integer, default=0)
-    counts_jauh_truck = db.Column(db.Integer, default=0)
-
-    counts_dekat_car = db.Column(db.Integer, default=0)
-    counts_dekat_motorcycle = db.Column(db.Integer, default=0)
-    counts_dekat_bus = db.Column(db.Integer, default=0)
-    counts_dekat_truck = db.Column(db.Integer, default=0)
-
-    grand_total = db.Column(db.Integer, default=0)
-
-    def __repr__(self):
-        # Menggunakan lokasi dari objek CCTV
-        return f"<CountingData {self.cctv.lokasi if self.cctv else 'N/A'}@{self.timestamp}>"
-
-
-class ParkingViolation(db.Model):
-    __tablename__ = "parking_violations"
-    id = db.Column(db.BigInteger, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-
-    # Foreign Key harus diubah ke BigInteger
-    cctv_id = db.Column(
-        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
-    )
-
-    vehicle_type = db.Column(db.String(50), nullable=False)
-    parked_duration_sec = db.Column(db.Float, nullable=False)
-    object_id = db.Column(db.Integer, nullable=False)  # ID tracker dari analyzer
-
-    def __repr__(self):
-        return f"<ParkingViolation {self.cctv.lokasi if self.cctv else 'N/A'} - {self.vehicle_type}>"
-
-
-class CrowdDetection(db.Model):
-    __tablename__ = "crowd_detections"
-    id = db.Column(db.BigInteger, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-
-    # Foreign Key harus diubah ke BigInteger
-    cctv_id = db.Column(
-        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
-    )
-
-    crowd_size = db.Column(db.Integer, nullable=False)
-    duration_sec = db.Column(db.Float, nullable=False)
-
-    def __repr__(self):
-        return f"<CrowdDetection {self.cctv.lokasi if self.cctv else 'N/A'} - {self.crowd_size} people>"
-
-
-class OdolDetection(db.Model):
-    __tablename__ = "odol_detections"
-    id = db.Column(db.BigInteger, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-
-    # Foreign Key harus diubah ke BigInteger
-    cctv_id = db.Column(
-        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
-    )
-
-    vehicle_type = db.Column(
-        db.String(50), nullable=False
-    )  # Seharusnya 'bus' atau 'truck'
-    aspect_ratio = db.Column(db.Float, nullable=False)
-    area = db.Column(db.Float, nullable=False)
-
-    def __repr__(self):
-        return f"<OdolDetection {self.cctv.lokasi if self.cctv else 'N/A'} - {self.vehicle_type}>"

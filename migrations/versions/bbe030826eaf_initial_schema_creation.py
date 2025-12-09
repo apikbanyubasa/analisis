@@ -1,8 +1,8 @@
 """Initial schema creation
 
-Revision ID: 28f6a6fed49b
+Revision ID: bbe030826eaf
 Revises: 
-Create Date: 2025-12-09 09:21:07.488225
+Create Date: 2025-12-09 18:59:47.338678
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '28f6a6fed49b'
+revision = 'bbe030826eaf'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -75,7 +75,7 @@ def upgrade():
     sa.Column('counts_dekat_bus', sa.Integer(), nullable=True),
     sa.Column('counts_dekat_truck', sa.Integer(), nullable=True),
     sa.Column('grand_total', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('counting_data', schema=None) as batch_op:
@@ -87,7 +87,7 @@ def upgrade():
     sa.Column('cctv_id', sa.BigInteger(), nullable=False),
     sa.Column('crowd_size', sa.Integer(), nullable=False),
     sa.Column('duration_sec', sa.Float(), nullable=False),
-    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('crowd_detections', schema=None) as batch_op:
@@ -112,7 +112,7 @@ def upgrade():
     sa.Column('vehicle_type', sa.String(length=50), nullable=False),
     sa.Column('aspect_ratio', sa.Float(), nullable=False),
     sa.Column('area', sa.Float(), nullable=False),
-    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('odol_detections', schema=None) as batch_op:
@@ -125,7 +125,7 @@ def upgrade():
     sa.Column('vehicle_type', sa.String(length=50), nullable=False),
     sa.Column('parked_duration_sec', sa.Float(), nullable=False),
     sa.Column('object_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('parking_violations', schema=None) as batch_op:
