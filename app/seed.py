@@ -49,13 +49,13 @@ def create_users_command(username, password):
         users_data = [
             {
                 "username": "admin",
-                "email": "admin@example.com",
+                "email": "apikby657@gmail.com",
                 "role": "admin",
                 "password": password,
             },
             {
                 "username": "operator",
-                "email": "operator@example.com",
+                "email": "apikbb123@gmail.com",
                 "role": "operator",
                 "password": password,
             },

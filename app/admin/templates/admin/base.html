@@ -28,13 +28,13 @@
             class="h-16 w-16 object-contain"
           />
           <div>
-            <h1 class="text-[12px] font-bold text-white leading-tight">PEMERINTAH DAERAH</h1>
+            <h1 class="text-[12px] font-bold text-white leading-tight">SMART MONITORING</h1>
             <h2 class="text-[12px] font-bold text-white leading-tight">KOTA BOGOR</h2>
           </div>
         </div>
       </div>
 
-      <div class="py-6 overflow-y-auto" style="max-height: calc(100vh - 116px - 72px);">
+      <div class="py-6 overflow-y-auto" style="max-height: calc(100vh - 116px - 72px)">
         <div class="px-6 mb-4">
           <h3 class="text-xs font-semibold text-purple-300 uppercase tracking-wider">Sistem</h3>
         </div>
@@ -147,25 +147,27 @@
         </nav>
       </div>
 
-      <div class="px-6 py-4 border-t border-purple-700">
-        <button
-          id="master-notification-toggle"
-          class="flex justify-center items-center w-full py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 font-medium"
-        >
-          <i class="fas fa-bell mr-2"></i>
-          <span>Notifikasi: Aktif</span>
-        </button>
-      </div>
-
       <div class="px-6 py-4 border-t border-purple-700 absolute bottom-0 left-0 right-0">
-        <a
-          id="logout-btn"
-          href="{{ url_for('admin.logout') }}"
-          class="flex justify-center items-center w-full py-3 rounded-lg bg-pink-700 text-white hover:bg-red-600 transition-all duration-200 group font-medium"
-          style="background-color: #A92C5A;"
-        >
-          <span class="font-medium">Logout</span>
-        </a>
+        <div class="flex space-x-3 w-full items-center">
+          <button
+            id="master-notification-toggle"
+            class="w-1/4 py-3 rounded-lg text-white transition-all duration-200 font-medium flex justify-center items-center"
+            style="background-color: #10b981"
+            data-status="active"
+            title="Toggle Notifikasi"
+          >
+            <i class="fas fa-bell"></i>
+          </button>
+
+          <a
+            id="logout-btn"
+            href="{{ url_for('admin.logout') }}"
+            class="w-3/4 flex justify-center items-center py-3 rounded-lg text-white hover:bg-red-600 transition-all duration-200 group font-medium"
+            style="background-color: #a92c5a"
+          >
+            <span class="font-medium">Logout</span>
+          </a>
+        </div>
       </div>
     </div>
 
@@ -228,20 +230,20 @@
           }
         });
 
-        // LOGIKA KONFIRMASI LOGOUT
+        // LOGIKA KONFIRMASI LOGOUT (TETAP SAMA)
         const logoutButton = document.getElementById('logout-btn');
         if (logoutButton) {
           logoutButton.addEventListener('click', function (event) {
-            event.preventDefault(); 
-            const logoutUrl = this.href; 
+            event.preventDefault();
+            const logoutUrl = this.href;
 
             Swal.fire({
               title: 'Apakah Anda Yakin?',
               text: 'Anda akan keluar dari sesi admin.',
               icon: 'warning',
               showCancelButton: true,
-              confirmButtonColor: '#d33', 
-              cancelButtonColor: '#6366f1', 
+              confirmButtonColor: '#d33',
+              cancelButtonColor: '#6366f1',
               confirmButtonText: 'Ya, Logout!',
               cancelButtonText: 'Batal',
             }).then((result) => {
@@ -259,38 +261,55 @@
       if (typeof io !== 'undefined') {
         const socket = io();
 
-        // --- AWAL: LOGIKA TOMBOL NOTIFIKASI ---
+        // --- AWAL: LOGIKA TOMBOL NOTIFIKASI BARU ---
         const toggleBtn = document.getElementById('master-notification-toggle');
-        let notificationsEnabled = true; 
+        let notificationsEnabled = toggleBtn.getAttribute('data-status') === 'active';
 
-        // Fungsi untuk memperbarui tampilan tombol
+        // Fungsi untuk memperbarui tampilan tombol (Hanya Ikon dan Style)
         function updateToggleButtonUI() {
+          // Hapus isi lama (jika ada teks atau span)
+          toggleBtn.innerHTML = '';
+
+          const icon = document.createElement('i');
+
           if (notificationsEnabled) {
-            toggleBtn.innerHTML = '<i class="fas fa-bell mr-2"></i><span>Notifikasi: Aktif</span>';
-            toggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
-            toggleBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            // Status ON (Aktif)
+            icon.className = 'fas fa-bell'; // Ikon lonceng penuh
+            toggleBtn.style.backgroundColor = '#10B981'; // Hijau
+            // Efek "garis" untuk status ON
+            toggleBtn.style.border = '2px solid #D1FAE5';
+            toggleBtn.title = 'Notifikasi: Aktif';
           } else {
-            toggleBtn.innerHTML = '<i class="fas fa-bell-slash mr-2"></i><span>Notifikasi: Non-aktif</span>';
-            toggleBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-            toggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+            // Status OFF (Non-aktif)
+            icon.className = 'fas fa-bell-slash'; // Ikon lonceng garis miring
+            toggleBtn.style.backgroundColor = '#6B7280'; // Abu-abu
+            // Hilangkan garis
+            toggleBtn.style.border = 'none';
+            toggleBtn.title = 'Notifikasi: Non-aktif';
           }
+
+          toggleBtn.appendChild(icon);
+          toggleBtn.setAttribute('data-status', notificationsEnabled ? 'active' : 'inactive');
         }
 
         // Ketika tombol diklik, kirim sinyal ke backend
         if (toggleBtn) {
-            toggleBtn.addEventListener('click', function() {
-                socket.emit('toggle_all_notifications');
-            });
+          // Inisialisasi tampilan awal
+          updateToggleButtonUI();
+
+          toggleBtn.addEventListener('click', function () {
+            // Kirim sinyal ke backend untuk mengubah status global
+            socket.emit('toggle_all_notifications');
+          });
         }
 
         // Mendengar update status dari backend
-        socket.on('notification_status_update', function(data) {
-          console.log("MENERIMA UPDATE STATUS DARI SERVER:", data);
+        socket.on('notification_status_update', function (data) {
+          console.log('MENERIMA UPDATE STATUS DARI SERVER:', data);
           notificationsEnabled = data.enabled;
           updateToggleButtonUI();
         });
         // --- AKHIR LOGIKA TOMBOL ---
-
 
         socket.on('connect', () => {
           console.log('Berhasil terhubung ke server Socket.IO.');
@@ -304,10 +323,10 @@
         socket.on('notifikasi_baru', (data) => {
           console.log('Menerima Notifikasi Baru:', data);
 
-          // --- PERBAIKAN 1: CEK STATUS TOMBOL DULU ---
+          // --- PERBAIKAN 1: CEK STATUS TOMBOL DULU (Menggunakan variabel status terbaru) ---
           if (!notificationsEnabled) {
-              console.log("Notifikasi diblokir karena tombol OFF.");
-              return; // Berhenti di sini jika tombol mati
+            console.log('Notifikasi diblokir karena tombol OFF.');
+            return; // Berhenti di sini jika tombol mati
           }
 
           Swal.fire({
@@ -322,26 +341,25 @@
             customClass: {
               popup: 'clickable-toast',
             },
-            
-            // --- PERBAIKAN 2: GABUNGKAN SEMUA LOGIC KE SATU didOpen ---
+
+            // --- LOGIC KLIK & TIMER ---
             didOpen: (toast) => {
               // Logic Timer
               toast.addEventListener('mouseenter', Swal.stopTimer);
               toast.addEventListener('mouseleave', Swal.resumeTimer);
-              
+
               // Logic Klik (Redirect hanya terjadi SAAT KLIK)
               toast.addEventListener('click', () => {
-                 window.location.href = "{{ url_for('admin.deteksi') }}";
+                window.location.href = "{{ url_for('admin.deteksi') }}";
               });
             },
           });
         });
-
       } else {
         console.error('Socket.IO library gagal dimuat.');
       }
     </script>
-    
+
     {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %}
     <script>
       window.addEventListener('DOMContentLoaded', (event) => {

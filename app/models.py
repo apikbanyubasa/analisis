@@ -9,7 +9,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 class CCTV(db.Model):
     __tablename__ = "cctv"
-    id = db.Column(db.Integer, primary_key=True)
+    # === PERUBAHAN: id menjadi db.BigInteger ===
+    id = db.Column(db.BigInteger, primary_key=True)
+    # ==========================================
     lokasi = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(50), default="Aktif")
     latitude = db.Column(db.Float, nullable=True)
@@ -18,9 +20,11 @@ class CCTV(db.Model):
     camera_type = db.Column(db.String(100), nullable=True)
     stream_url = db.Column(db.String(500), nullable=True)
     type = db.Column(db.String(100), nullable=True)
-    
+
     counting_data_list = db.relationship("CountingData", backref="cctv", lazy=True)
-    parking_violations_list = db.relationship("ParkingViolation", backref="cctv", lazy=True)
+    parking_violations_list = db.relationship(
+        "ParkingViolation", backref="cctv", lazy=True
+    )
     crowd_detections_list = db.relationship("CrowdDetection", backref="cctv", lazy=True)
     odol_detections_list = db.relationship("OdolDetection", backref="cctv", lazy=True)
 
@@ -30,7 +34,9 @@ class CCTV(db.Model):
 
 class BatasWilayah(db.Model):
     __tablename__ = "batas_wilayah"
-    id = db.Column(db.Integer, primary_key=True)
+    # === PERUBAHAN: id menjadi db.BigInteger ===
+    id = db.Column(db.BigInteger, primary_key=True)
+    # ==========================================
     nama = db.Column(db.String(255), nullable=False)
     # Jenis bisa 'Kabupaten' atau 'Kota'
     jenis = db.Column(db.String(50), nullable=False, index=True)
@@ -45,7 +51,9 @@ class BatasWilayah(db.Model):
 
 class Kontak(db.Model):
     __tablename__ = "kontak"
-    id = db.Column(db.Integer, primary_key=True)
+    # === PERUBAHAN: id menjadi db.BigInteger ===
+    id = db.Column(db.BigInteger, primary_key=True)
+    # ==========================================
     instansi = db.Column(db.String(100), nullable=False)
     nomor_telp = db.Column(db.String(20), nullable=False)
     # Icon bisa berupa class Font Awesome (e.g., 'fas fa-ambulance')
@@ -55,12 +63,15 @@ class Kontak(db.Model):
 
 
 class Dispatch(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    # === PERUBAHAN: id menjadi db.BigInteger ===
+    id = db.Column(db.BigInteger, primary_key=True)
+    # ==========================================
 
-    # Foreign Key ke tabel Kontak (Sudah ada)
-    kontak_id = db.Column(db.Integer, db.ForeignKey("kontak.id"), nullable=False)
+    # Foreign Key ke tabel Kontak (FK harus diubah ke BigInteger jika PK-nya BigInteger)
+    kontak_id = db.Column(db.BigInteger, db.ForeignKey("kontak.id"), nullable=False)
 
-    operator_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    # Foreign Key ke tabel User (FK harus diubah ke BigInteger jika PK-nya BigInteger)
+    user_id = db.Column(db.BigInteger, db.ForeignKey("users.id"), nullable=False)
 
     # Kolom data
     tipe_dispatch = db.Column(db.String(50), nullable=False)
@@ -82,7 +93,9 @@ class User(db.Model, UserMixin):
     __tablename__ = "users"
     __table_args__ = {"extend_existing": True}
 
-    id = db.Column(db.Integer, primary_key=True)
+    # === PERUBAHAN: id menjadi db.BigInteger ===
+    id = db.Column(db.BigInteger, primary_key=True)
+    # ==========================================
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -120,9 +133,9 @@ class CountingData(db.Model):
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-    # KOREKSI: Hapus kolom location, ganti dengan FK
+    # Foreign Key harus diubah ke BigInteger (karena CCTV.id adalah BigInteger)
     cctv_id = db.Column(
-        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
     )
 
     # Data Total Count (TIDAK ADA YANG DIHAPUS)
@@ -148,9 +161,9 @@ class ParkingViolation(db.Model):
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-    # KOREKSI: Hapus kolom location, ganti dengan FK
+    # Foreign Key harus diubah ke BigInteger
     cctv_id = db.Column(
-        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
     )
 
     vehicle_type = db.Column(db.String(50), nullable=False)
@@ -166,9 +179,9 @@ class CrowdDetection(db.Model):
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-    # KOREKSI: Hapus kolom location, ganti dengan FK
+    # Foreign Key harus diubah ke BigInteger
     cctv_id = db.Column(
-        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
     )
 
     crowd_size = db.Column(db.Integer, nullable=False)
@@ -183,9 +196,9 @@ class OdolDetection(db.Model):
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-    # KOREKSI: Hapus kolom location, ganti dengan FK
+    # Foreign Key harus diubah ke BigInteger
     cctv_id = db.Column(
-        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+        db.BigInteger, db.ForeignKey("cctv.id"), nullable=False, index=True
     )
 
     vehicle_type = db.Column(

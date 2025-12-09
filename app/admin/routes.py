@@ -327,7 +327,7 @@ def send_dispatch():
         # 1. Buat objek Dispatch baru
         new_dispatch = Dispatch(
             kontak_id=kontak_id,
-            operator_id=current_user.id,
+            user_id=current_user.id,
             tipe_dispatch=tipe_dispatch,
             instruksi=instruksi,
         )
@@ -526,7 +526,7 @@ def history():
     all_dispatches = (
         db.session.query(Dispatch, Kontak, User)
         .join(Kontak, Dispatch.kontak_id == Kontak.id)
-        .join(User, Dispatch.operator_id == User.id)
+        .join(User, Dispatch.user_id == User.id)
         .order_by(Dispatch.waktu_kirim.desc())
         .all()
     )

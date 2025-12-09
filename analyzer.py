@@ -1308,9 +1308,6 @@ def run_detection_worker(
             if frame.shape[1] > 600:
                 h_orig, w_orig = frame.shape[:2]
                 frame = cv2.resize(frame, (600, int(h_orig * 600 / w_orig)))
-                if not hasattr(cv2, "has_saved_frame"):
-                    cv2.imwrite("last_resized_frame.jpg", frame)
-                    cv2.has_saved_frame = True
 
             detections = []
             tracked_objects = {}
