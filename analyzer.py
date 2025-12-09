@@ -23,7 +23,7 @@ from app.models import (
 )
 from flask import (
     Flask,
-    current_app,
+    # current_app tidak diperlukan
 )
 
 # --- Impor SocketIO dari Server ---
@@ -51,7 +51,6 @@ GLOBAL_APP_INSTANCE = None
 DB_CLEANUP_LOCK = threading.Lock()
 # --- VARIABEL GLOBAL UNTUK KONTROL NOTIFIKASI ---
 GLOBAL_NOTIFICATION_ENABLED = True
-
 
 
 def set_global_app_instance(app_instance: Flask):
@@ -429,24 +428,47 @@ class SimpleObjectTracker:
         return (transformed_point[0][0][0], transformed_point[0][0][1])
 
 
-# --- FUNGSI DATABASE BARU (SQLAlchemy) ---
+# -------------------------------------------------------------------
+# == FUNGSI DATABASE: KOREKSI PENGGUNAAN ID (FK) ==
+# -------------------------------------------------------------------
 
 
-def cleanup_old_data(model, location_name, max_rows=50):
+def get_cctv_id_by_location_name(location_name):
+    """Mencari ID CCTV berdasarkan nama lokasi (lokasi) dari database."""
+    # Fungsi ini diasumsikan dipanggil dalam konteks aplikasi Flask!
+    try:
+        # Asumsi kolom lokasi di CCTV adalah 'lokasi'
+        cctv_obj = CCTV.query.filter_by(lokasi=location_name).first()
+        if cctv_obj:
+            return cctv_obj.id
+        else:
+            print(
+                f"[{threading.current_thread().name}] ERROR: CCTV dengan lokasi '{location_name}' tidak ditemukan. Tidak bisa menyimpan data."
+            )
+            return None
+    except Exception as e:
+        print(f"[{threading.current_thread().name}] DB lookup error (get_cctv_id): {e}")
+        return None
+
+
+def cleanup_old_data(
+    model, cctv_id, max_rows=50
+):  # 💡 Menerima cctv_id, bukan location_name
     """
     Membersihkan baris data lama dari suatu model (tabel)
-    untuk lokasi tertentu jika jumlah total baris melebihi batas.
+    untuk lokasi tertentu (berdasarkan cctv_id) jika jumlah total baris melebihi batas.
     """
     with DB_CLEANUP_LOCK:
         try:
-            current_row_count = model.query.filter_by(location=location_name).count()
+            # 💡 FILTER berdasarkan cctv_id
+            current_row_count = model.query.filter_by(cctv_id=cctv_id).count()
 
             if current_row_count > max_rows:
                 rows_to_delete = current_row_count - max_rows
 
                 oldest_ids = (
                     db.session.query(model.id)
-                    .filter_by(location=location_name)
+                    .filter_by(cctv_id=cctv_id)  # 💡 Filter berdasarkan cctv_id
                     .order_by(model.id.asc())
                     .limit(rows_to_delete)
                     .subquery()
@@ -459,7 +481,7 @@ def cleanup_old_data(model, location_name, max_rows=50):
                 db.session.commit()
                 thread_name = threading.current_thread().name
                 print(
-                    f"[{thread_name}] CLEANUP SUCCESS: Dihapus {rows_to_delete} baris lama dari {model.__tablename__} ({location_name}). Sisa: {current_row_count - rows_to_delete}"
+                    f"[{thread_name}] CLEANUP SUCCESS: Dihapus {rows_to_delete} baris lama dari {model.__tablename__} (CCTV ID {cctv_id}). Sisa: {current_row_count - rows_to_delete}"
                 )
 
         except Exception as e:
@@ -492,21 +514,31 @@ def reset_location_data(location_name):
     # 2. Hapus Data Historis dari DATABASE
     try:
         with get_flask_app_context():
-            CountingData.query.filter(CountingData.location == location_name).delete(
+            # [BARU] Dapatkan ID untuk penghapusan yang benar
+            cctv_id = get_cctv_id_by_location_name(location_name)
+            if cctv_id is None:
+                print(
+                    f"[{threading.current_thread().name}] ERROR: Reset DB dibatalkan karena CCTV ID tidak ditemukan."
+                )
+                # Lanjut hapus tracker di memori, tapi DB di-skip
+                return
+
+            # 💡 Filter Berdasarkan cctv_id yang baru!
+            CountingData.query.filter(CountingData.cctv_id == cctv_id).delete(
                 synchronize_session=False
             )
-            ParkingViolation.query.filter(
-                ParkingViolation.location == location_name
-            ).delete(synchronize_session=False)
-            OdolDetection.query.filter(OdolDetection.location == location_name).delete(
+            ParkingViolation.query.filter(ParkingViolation.cctv_id == cctv_id).delete(
                 synchronize_session=False
             )
-            CrowdDetection.query.filter(
-                CrowdDetection.location == location_name
-            ).delete(synchronize_session=False)
+            OdolDetection.query.filter(OdolDetection.cctv_id == cctv_id).delete(
+                synchronize_session=False
+            )
+            CrowdDetection.query.filter(CrowdDetection.cctv_id == cctv_id).delete(
+                synchronize_session=False
+            )
             db.session.commit()
             print(
-                f"[{threading.current_thread().name}] Database RESET LENGKAP untuk {location_name} done."
+                f"[{threading.current_thread().name}] Database RESET LENGKAP untuk {location_name} (ID: {cctv_id}) done."
             )
 
     except Exception as e:
@@ -543,6 +575,11 @@ def save_counting_data(location, counts_jauh, counts_dekat):
     """Menyimpan data counting ke PostgreSQL melalui SQLAlchemy dan membersihkan data lama."""
     try:
         with get_flask_app_context():
+            # [BARU] Dapatkan ID CCTV
+            cctv_id = get_cctv_id_by_location_name(location)
+            if cctv_id is None:
+                return
+
             grand_total = sum(
                 counts_jauh.get(c, 0) for c in ["car", "motorcycle", "bus", "truck"]
             ) + sum(
@@ -550,7 +587,8 @@ def save_counting_data(location, counts_jauh, counts_dekat):
             )
 
             new_count = CountingData(
-                location=location,
+                # 💡 GUNAKAN cctv_id!
+                cctv_id=cctv_id,
                 counts_jauh_car=counts_jauh.get("car", 0),
                 counts_jauh_motorcycle=counts_jauh.get("motorcycle", 0),
                 counts_jauh_bus=counts_jauh.get("bus", 0),
@@ -564,7 +602,8 @@ def save_counting_data(location, counts_jauh, counts_dekat):
             db.session.add(new_count)
             db.session.commit()
 
-            cleanup_old_data(CountingData, location, max_rows=200)
+            # Panggil cleanup dengan cctv_id
+            cleanup_old_data(CountingData, cctv_id, max_rows=200)
 
     except Exception as e:
         try:
@@ -578,8 +617,14 @@ def save_parking_violation(location, vehicle_type, duration, obj_id):
     """Menyimpan data pelanggaran parkir ke PostgreSQL dan membersihkan data lama."""
     try:
         with get_flask_app_context():
+            # [BARU] Dapatkan ID CCTV
+            cctv_id = get_cctv_id_by_location_name(location)
+            if cctv_id is None:
+                return
+
             new_violation = ParkingViolation(
-                location=location,
+                # 💡 GUNAKAN cctv_id!
+                cctv_id=cctv_id,
                 vehicle_type=vehicle_type,
                 parked_duration_sec=duration,
                 object_id=obj_id,
@@ -587,7 +632,8 @@ def save_parking_violation(location, vehicle_type, duration, obj_id):
             db.session.add(new_violation)
             db.session.commit()
 
-            cleanup_old_data(ParkingViolation, location, max_rows=50)
+            # Panggil cleanup dengan cctv_id
+            cleanup_old_data(ParkingViolation, cctv_id, max_rows=50)
 
     except Exception as e:
         try:
@@ -601,13 +647,22 @@ def save_crowd_detection(location, crowd_size, duration):
     """Menyimpan data deteksi kerumunan ke PostgreSQL dan membersihkan data lama."""
     try:
         with get_flask_app_context():
+            # [BARU] Dapatkan ID CCTV
+            cctv_id = get_cctv_id_by_location_name(location)
+            if cctv_id is None:
+                return
+
             new_crowd = CrowdDetection(
-                location=location, crowd_size=crowd_size, duration_sec=duration
+                # 💡 GUNAKAN cctv_id!
+                cctv_id=cctv_id,
+                crowd_size=crowd_size,
+                duration_sec=duration,
             )
             db.session.add(new_crowd)
             db.session.commit()
 
-            cleanup_old_data(CrowdDetection, location, max_rows=50)
+            # Panggil cleanup dengan cctv_id
+            cleanup_old_data(CrowdDetection, cctv_id, max_rows=50)
 
     except Exception as e:
         try:
@@ -621,8 +676,14 @@ def save_odol_detection(location, vehicle_type, aspect_ratio, area):
     """Menyimpan data deteksi ODOL ke PostgreSQL dan membersihkan data lama."""
     try:
         with get_flask_app_context():
+            # [BARU] Dapatkan ID CCTV
+            cctv_id = get_cctv_id_by_location_name(location)
+            if cctv_id is None:
+                return
+
             new_odol = OdolDetection(
-                location=location,
+                # 💡 GUNAKAN cctv_id!
+                cctv_id=cctv_id,
                 vehicle_type=vehicle_type,
                 aspect_ratio=aspect_ratio,
                 area=area,
@@ -630,7 +691,8 @@ def save_odol_detection(location, vehicle_type, aspect_ratio, area):
             db.session.add(new_odol)
             db.session.commit()
 
-            cleanup_old_data(OdolDetection, location, max_rows=50)
+            # Panggil cleanup dengan cctv_id
+            cleanup_old_data(OdolDetection, cctv_id, max_rows=50)
 
     except Exception as e:
         try:
@@ -1125,7 +1187,7 @@ def run_detection_worker(
     print(f"[{thread_name}] WORKER DIMULAI: Memulai deteksi untuk: {location_name}")
     init_database()
 
-     # ---- TAMBAHKAN 3 BARI INI ----
+    # ---- TAMBAHKAN 3 BARI INI ----
     last_odol_notification_time = {}
     last_parking_notification_time = {}
     last_crowd_notification_time = {}
@@ -1176,12 +1238,22 @@ def run_detection_worker(
     # 💥 TAMBAHAN KRITIS: PAKSA CLEANUP SAAT WORKER BARU DIMULAI
     try:
         with get_flask_app_context():
-            cleanup_old_data(CountingData, location_name, max_rows=200)
-            cleanup_old_data(ParkingViolation, location_name, max_rows=50)
-            cleanup_old_data(CrowdDetection, location_name, max_rows=50)
-            cleanup_old_data(OdolDetection, location_name, max_rows=50)
-            db.session.commit()
-            print(f"[{thread_name}] DEBUG: Initial cleanup completed.")
+            # [BARU] Dapatkan ID CCTV untuk cleanup awal
+            cctv_id = get_cctv_id_by_location_name(location_name)
+            if cctv_id is not None:
+                cleanup_old_data(CountingData, cctv_id, max_rows=200)
+                cleanup_old_data(ParkingViolation, cctv_id, max_rows=50)
+                cleanup_old_data(CrowdDetection, cctv_id, max_rows=50)
+                cleanup_old_data(OdolDetection, cctv_id, max_rows=50)
+                db.session.commit()
+                print(
+                    f"[{thread_name}] DEBUG: Initial cleanup completed using cctv_id {cctv_id}."
+                )
+            else:
+                print(
+                    f"[{thread_name}] DEBUG: Initial cleanup skipped, CCTV ID not found for {location_name}."
+                )
+
     except Exception as e:
         print(f"[{thread_name}] DEBUG: Initial cleanup failed: {e}")
 
@@ -1332,11 +1404,15 @@ def run_detection_worker(
             if is_crowd and not crowd_currently_logged:
                 # ---- TAMBAHKAN LOGIKA WAKTU ----
                 current_time = time.time()
-                last_notification_time = last_crowd_notification_time.get(location_name, 0)
-                
+                last_notification_time = last_crowd_notification_time.get(
+                    location_name, 0
+                )
+
                 # Hanya kirim notifikasi jika sudah 30 detik sejak notifikasi kerumunan terakhir di lokasi ini
                 if (current_time - last_notification_time) > 30:
-                    print(f"[{thread_name}] DEBUG CROWD TRIGGER (WITH TIME CHECK): Crowd Size {len(crowd_ids)}, Location: {location_name}")
+                    print(
+                        f"[{thread_name}] DEBUG CROWD TRIGGER (WITH TIME CHECK): Crowd Size {len(crowd_ids)}, Location: {location_name}"
+                    )
 
                     first_seen_time = (
                         tracker.first_seen.get(list(crowd_ids)[0], current_time)
@@ -1346,7 +1422,7 @@ def run_detection_worker(
                     duration = current_time - first_seen_time
                     save_crowd_detection(location_name, len(crowd_ids), duration)
                     crowd_currently_logged = True
-                    
+
                     # Simpan waktu notifikasi terakhir
                     last_crowd_notification_time[location_name] = current_time
 
@@ -1388,17 +1464,24 @@ def run_detection_worker(
 
                         # ---- TAMBAHKAN LOGIKA WAKTU ----
                         current_time = time.time()
-                        last_notification_time = last_parking_notification_time.get(location_name, 0)
-                        
+                        last_notification_time = last_parking_notification_time.get(
+                            location_name, 0
+                        )
+
                         # Hanya kirim notifikasi jika sudah 20 detik sejak notifikasi parkir terakhir di lokasi ini
                         if (current_time - last_notification_time) > 20:
-                            print(f"[{thread_name}] DEBUG PARKIR TRIGGER (WITH TIME CHECK): Obj ID {obj_id}, Location: {location_name}")
+                            print(
+                                f"[{thread_name}] DEBUG PARKIR TRIGGER (WITH TIME CHECK): Obj ID {obj_id}, Location: {location_name}"
+                            )
 
                             save_parking_violation(
-                                location_name, obj["class_name"], parked_duration, obj_id
+                                location_name,
+                                obj["class_name"],
+                                parked_duration,
+                                obj_id,
                             )
                             session_parking_count += 1
-                            
+
                             # Simpan waktu notifikasi terakhir
                             last_parking_notification_time[location_name] = current_time
 
@@ -1428,18 +1511,26 @@ def run_detection_worker(
                         if is_odol and not was_odol_logged:
                             # ---- TAMBAHKAN LOGIKA WAKTU ----
                             current_time = time.time()
-                            last_notification_time = last_odol_notification_time.get(location_name, 0)
-                            
+                            last_notification_time = last_odol_notification_time.get(
+                                location_name, 0
+                            )
+
                             # Hanya kirim notifikasi jika sudah 15 detik sejak notifikasi ODOL terakhir di lokasi ini
                             # KODE YANG SUDAH DIPERBAIKI UNTUK ODOL
                             if (current_time - last_notification_time) > 15:
-                                print(f"[{thread_name}] DEBUG ODOL TRIGGER (WITH TIME CHECK): Obj ID {obj_id}, Location: {location_name}")
+                                print(
+                                    f"[{thread_name}] DEBUG ODOL TRIGGER (WITH TIME CHECK): Obj ID {obj_id}, Location: {location_name}"
+                                )
 
-                                save_odol_detection(location_name, obj["class_name"], aspect_ratio, area)
+                                save_odol_detection(
+                                    location_name, obj["class_name"], aspect_ratio, area
+                                )
                                 tracker.is_odol_logged[obj_id] = True
                                 session_odol_count += 1
-                                
-                                last_odol_notification_time[location_name] = current_time
+
+                                last_odol_notification_time[location_name] = (
+                                    current_time
+                                )
 
                                 # ---- TAMBAHKAN KONDISI GLOBAL INI ----
                                 if GLOBAL_NOTIFICATION_ENABLED:

@@ -1,8 +1,8 @@
 """Initial schema creation
 
-Revision ID: df91ceb8aa38
+Revision ID: 6ba2215a1e5d
 Revises: 
-Create Date: 2025-12-04 08:33:13.095743
+Create Date: 2025-12-08 11:57:35.901095
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'df91ceb8aa38'
+revision = '6ba2215a1e5d'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -41,65 +41,12 @@ def upgrade():
     sa.Column('type', sa.String(length=100), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('counting_data',
-    sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('timestamp', sa.DateTime(), nullable=True),
-    sa.Column('location', sa.String(length=255), nullable=False),
-    sa.Column('counts_jauh_car', sa.Integer(), nullable=True),
-    sa.Column('counts_jauh_motorcycle', sa.Integer(), nullable=True),
-    sa.Column('counts_jauh_bus', sa.Integer(), nullable=True),
-    sa.Column('counts_jauh_truck', sa.Integer(), nullable=True),
-    sa.Column('counts_dekat_car', sa.Integer(), nullable=True),
-    sa.Column('counts_dekat_motorcycle', sa.Integer(), nullable=True),
-    sa.Column('counts_dekat_bus', sa.Integer(), nullable=True),
-    sa.Column('counts_dekat_truck', sa.Integer(), nullable=True),
-    sa.Column('grand_total', sa.Integer(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    with op.batch_alter_table('counting_data', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_counting_data_location'), ['location'], unique=False)
-
-    op.create_table('crowd_detections',
-    sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('timestamp', sa.DateTime(), nullable=True),
-    sa.Column('location', sa.String(length=255), nullable=False),
-    sa.Column('crowd_size', sa.Integer(), nullable=False),
-    sa.Column('duration_sec', sa.Float(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    with op.batch_alter_table('crowd_detections', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_crowd_detections_location'), ['location'], unique=False)
-
     op.create_table('kontak',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('instansi', sa.String(length=100), nullable=False),
     sa.Column('nomor_telp', sa.String(length=20), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('odol_detections',
-    sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('timestamp', sa.DateTime(), nullable=True),
-    sa.Column('location', sa.String(length=255), nullable=False),
-    sa.Column('vehicle_type', sa.String(length=50), nullable=False),
-    sa.Column('aspect_ratio', sa.Float(), nullable=False),
-    sa.Column('area', sa.Float(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    with op.batch_alter_table('odol_detections', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_odol_detections_location'), ['location'], unique=False)
-
-    op.create_table('parking_violations',
-    sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('timestamp', sa.DateTime(), nullable=True),
-    sa.Column('location', sa.String(length=255), nullable=False),
-    sa.Column('vehicle_type', sa.String(length=50), nullable=False),
-    sa.Column('parked_duration_sec', sa.Float(), nullable=False),
-    sa.Column('object_id', sa.Integer(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    with op.batch_alter_table('parking_violations', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_parking_violations_location'), ['location'], unique=False)
-
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('username', sa.String(length=80), nullable=False),
@@ -115,6 +62,37 @@ def upgrade():
     sa.UniqueConstraint('reset_token'),
     sa.UniqueConstraint('username')
     )
+    op.create_table('counting_data',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(), nullable=True),
+    sa.Column('cctv_id', sa.Integer(), nullable=False),
+    sa.Column('counts_jauh_car', sa.Integer(), nullable=True),
+    sa.Column('counts_jauh_motorcycle', sa.Integer(), nullable=True),
+    sa.Column('counts_jauh_bus', sa.Integer(), nullable=True),
+    sa.Column('counts_jauh_truck', sa.Integer(), nullable=True),
+    sa.Column('counts_dekat_car', sa.Integer(), nullable=True),
+    sa.Column('counts_dekat_motorcycle', sa.Integer(), nullable=True),
+    sa.Column('counts_dekat_bus', sa.Integer(), nullable=True),
+    sa.Column('counts_dekat_truck', sa.Integer(), nullable=True),
+    sa.Column('grand_total', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('counting_data', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_counting_data_cctv_id'), ['cctv_id'], unique=False)
+
+    op.create_table('crowd_detections',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(), nullable=True),
+    sa.Column('cctv_id', sa.Integer(), nullable=False),
+    sa.Column('crowd_size', sa.Integer(), nullable=False),
+    sa.Column('duration_sec', sa.Float(), nullable=False),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('crowd_detections', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_crowd_detections_cctv_id'), ['cctv_id'], unique=False)
+
     op.create_table('dispatch',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('kontak_id', sa.Integer(), nullable=False),
@@ -127,30 +105,56 @@ def upgrade():
     sa.ForeignKeyConstraint(['operator_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('odol_detections',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(), nullable=True),
+    sa.Column('cctv_id', sa.Integer(), nullable=False),
+    sa.Column('vehicle_type', sa.String(length=50), nullable=False),
+    sa.Column('aspect_ratio', sa.Float(), nullable=False),
+    sa.Column('area', sa.Float(), nullable=False),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('odol_detections', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_odol_detections_cctv_id'), ['cctv_id'], unique=False)
+
+    op.create_table('parking_violations',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(), nullable=True),
+    sa.Column('cctv_id', sa.Integer(), nullable=False),
+    sa.Column('vehicle_type', sa.String(length=50), nullable=False),
+    sa.Column('parked_duration_sec', sa.Float(), nullable=False),
+    sa.Column('object_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['cctv_id'], ['cctv.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    with op.batch_alter_table('parking_violations', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_parking_violations_cctv_id'), ['cctv_id'], unique=False)
+
     # ### end Alembic commands ###
 
 
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table('dispatch')
-    op.drop_table('users')
     with op.batch_alter_table('parking_violations', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_parking_violations_location'))
+        batch_op.drop_index(batch_op.f('ix_parking_violations_cctv_id'))
 
     op.drop_table('parking_violations')
     with op.batch_alter_table('odol_detections', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_odol_detections_location'))
+        batch_op.drop_index(batch_op.f('ix_odol_detections_cctv_id'))
 
     op.drop_table('odol_detections')
-    op.drop_table('kontak')
+    op.drop_table('dispatch')
     with op.batch_alter_table('crowd_detections', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_crowd_detections_location'))
+        batch_op.drop_index(batch_op.f('ix_crowd_detections_cctv_id'))
 
     op.drop_table('crowd_detections')
     with op.batch_alter_table('counting_data', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_counting_data_location'))
+        batch_op.drop_index(batch_op.f('ix_counting_data_cctv_id'))
 
     op.drop_table('counting_data')
+    op.drop_table('users')
+    op.drop_table('kontak')
     op.drop_table('cctv')
     with op.batch_alter_table('batas_wilayah', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_batas_wilayah_jenis'))

@@ -7,9 +7,6 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
-# ===================================================================
-# == MODEL CCTV (SQLAlchemy) - TIDAK DIUBAH
-# ===================================================================
 class CCTV(db.Model):
     __tablename__ = "cctv"
     id = db.Column(db.Integer, primary_key=True)
@@ -21,22 +18,17 @@ class CCTV(db.Model):
     camera_type = db.Column(db.String(100), nullable=True)
     stream_url = db.Column(db.String(500), nullable=True)
     type = db.Column(db.String(100), nullable=True)
+    
+    counting_data_list = db.relationship("CountingData", backref="cctv", lazy=True)
+    parking_violations_list = db.relationship("ParkingViolation", backref="cctv", lazy=True)
+    crowd_detections_list = db.relationship("CrowdDetection", backref="cctv", lazy=True)
+    odol_detections_list = db.relationship("OdolDetection", backref="cctv", lazy=True)
 
     def __repr__(self):
         return f"<CCTV {self.lokasi}>"
 
 
-# ===================================================================
-# == MODEL BARU UNTUK DATA PETA DAN BATAS
-# ===================================================================
-
-
 class BatasWilayah(db.Model):
-    """
-    Model untuk menyimpan data batas wilayah (Kabupaten dan Kota).
-    Data geometrinya disimpan dalam format GeoJSON di kolom 'geojson'.
-    """
-
     __tablename__ = "batas_wilayah"
     id = db.Column(db.Integer, primary_key=True)
     nama = db.Column(db.String(255), nullable=False)
@@ -51,14 +43,7 @@ class BatasWilayah(db.Model):
         return f"<BatasWilayah {self.nama}>"
 
 
-# ===================================================================
-# == MODEL KONTAK DARURAT (BARU)
-# ===================================================================
 class Kontak(db.Model):
-    """
-    Model untuk menyimpan data kontak darurat (instansi, nomor, dan ikon).
-    """
-
     __tablename__ = "kontak"
     id = db.Column(db.Integer, primary_key=True)
     instansi = db.Column(db.String(100), nullable=False)
@@ -69,19 +54,13 @@ class Kontak(db.Model):
         return f"<Kontak {self.instansi}: {self.nomor_telp}>"
 
 
-# app/models.py
-
-# ... (Model User, CCTV, Kontak, dll. yang sudah ada)
-
-
 class Dispatch(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Foreign Key ke tabel Kontak (Sudah ada)
     kontak_id = db.Column(db.Integer, db.ForeignKey("kontak.id"), nullable=False)
 
-
-    operator_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    operator_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
 
     # Kolom data
     tipe_dispatch = db.Column(db.String(50), nullable=False)
@@ -99,9 +78,6 @@ class Dispatch(db.Model):
         return f"Dispatch('{self.tipe_dispatch}', '{self.instruksi[:20]}...')"
 
 
-# ===================================================================
-# == MODEL USER (SQLAlchemy) - TIDAK DIUBAH
-# ===================================================================
 class User(db.Model, UserMixin):
     __tablename__ = "users"
     __table_args__ = {"extend_existing": True}
@@ -139,63 +115,84 @@ class User(db.Model, UserMixin):
         return f"<User {self.username}>"
 
 
-# ===================================================================
-# == MODEL BARU UNTUK DATA ANALYZER (POSTGRESQL)
-# ===================================================================
-
 class CountingData(db.Model):
     __tablename__ = "counting_data"
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-    location = db.Column(db.String(255), nullable=False, index=True)
-    
-    # Data Total Count (Misalnya, total per arah atau per interval waktu)
+
+    # KOREKSI: Hapus kolom location, ganti dengan FK
+    cctv_id = db.Column(
+        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+    )
+
+    # Data Total Count (TIDAK ADA YANG DIHAPUS)
     counts_jauh_car = db.Column(db.Integer, default=0)
     counts_jauh_motorcycle = db.Column(db.Integer, default=0)
     counts_jauh_bus = db.Column(db.Integer, default=0)
     counts_jauh_truck = db.Column(db.Integer, default=0)
-    
+
     counts_dekat_car = db.Column(db.Integer, default=0)
     counts_dekat_motorcycle = db.Column(db.Integer, default=0)
     counts_dekat_bus = db.Column(db.Integer, default=0)
     counts_dekat_truck = db.Column(db.Integer, default=0)
-    
+
     grand_total = db.Column(db.Integer, default=0)
 
     def __repr__(self):
-        return f"<CountingData {self.location}@{self.timestamp}>"
+        # Menggunakan lokasi dari objek CCTV
+        return f"<CountingData {self.cctv.lokasi if self.cctv else 'N/A'}@{self.timestamp}>"
+
 
 class ParkingViolation(db.Model):
     __tablename__ = "parking_violations"
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-    location = db.Column(db.String(255), nullable=False, index=True)
+
+    # KOREKSI: Hapus kolom location, ganti dengan FK
+    cctv_id = db.Column(
+        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+    )
+
     vehicle_type = db.Column(db.String(50), nullable=False)
     parked_duration_sec = db.Column(db.Float, nullable=False)
-    object_id = db.Column(db.Integer, nullable=False) # ID tracker dari analyzer
-    
+    object_id = db.Column(db.Integer, nullable=False)  # ID tracker dari analyzer
+
     def __repr__(self):
-        return f"<ParkingViolation {self.vehicle_type}@{self.location}>"
+        return f"<ParkingViolation {self.cctv.lokasi if self.cctv else 'N/A'} - {self.vehicle_type}>"
+
 
 class CrowdDetection(db.Model):
     __tablename__ = "crowd_detections"
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-    location = db.Column(db.String(255), nullable=False, index=True)
+
+    # KOREKSI: Hapus kolom location, ganti dengan FK
+    cctv_id = db.Column(
+        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+    )
+
     crowd_size = db.Column(db.Integer, nullable=False)
     duration_sec = db.Column(db.Float, nullable=False)
-    
+
     def __repr__(self):
-        return f"<CrowdDetection {self.crowd_size} people @{self.location}>"
+        return f"<CrowdDetection {self.cctv.lokasi if self.cctv else 'N/A'} - {self.crowd_size} people>"
+
 
 class OdolDetection(db.Model):
     __tablename__ = "odol_detections"
     id = db.Column(db.BigInteger, primary_key=True)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-    location = db.Column(db.String(255), nullable=False, index=True)
-    vehicle_type = db.Column(db.String(50), nullable=False) # Seharusnya 'bus' atau 'truck'
+
+    # KOREKSI: Hapus kolom location, ganti dengan FK
+    cctv_id = db.Column(
+        db.Integer, db.ForeignKey("cctv.id"), nullable=False, index=True
+    )
+
+    vehicle_type = db.Column(
+        db.String(50), nullable=False
+    )  # Seharusnya 'bus' atau 'truck'
     aspect_ratio = db.Column(db.Float, nullable=False)
     area = db.Column(db.Float, nullable=False)
-    
+
     def __repr__(self):
-        return f"<OdolDetection {self.vehicle_type} @{self.location}>"
+        return f"<OdolDetection {self.cctv.lokasi if self.cctv else 'N/A'} - {self.vehicle_type}>"
