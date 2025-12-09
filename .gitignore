@@ -71,3 +71,5 @@ __pycache__/
 *.pyc
 # Lingkungan Virtual
 venv/
+
+last_resized_frame.jpg
