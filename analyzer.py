@@ -162,12 +162,43 @@ class SimpleObjectTracker:
         self.speed_history = defaultdict(lambda: deque(maxlen=5))
 
         # --- Bagian yang berkonflik di __init__ ---
-        src_pts = np.array(
-            [[370, 253], [463, 251], [480, 350], [373, 350]], dtype=np.float32
-        )
+        src_pts = np.array([[0,0], [100,0], [100,100], [0,100]], dtype=np.float32)
         self.perspective_matrix = None
-        self.ppm_birdseye = None
+        self.pixels_per_meter = None
+        self.dst_size = (500, 600)
+        # self.ppm_birdseye = None
         # --- Akhir bagian konflik di __init__ ---
+    
+    def init_perspective(self, src_pts_list, real_width_m=3.5):
+        """
+        src_pts_list: List 4 koordinat [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] dari config
+        real_width_m: Lebar asli jalan (meter) yang diwakili oleh lebar dst_size
+        """
+        if src_pts_list is not None:
+            self.src_pts = np.array(src_pts_list, dtype=np.float32)
+            
+            # Kita buat virtual view tegak lurus
+            w, h = self.dst_size
+            dst_pts = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+            
+            try:
+                self.perspective_matrix = cv2.getPerspectiveTransform(self.src_pts, dst_pts)
+                # Hitung skala: lebar virtual (piksel) / lebar asli (meter)
+                self.pixels_per_meter = w / real_width_m
+                print(f"[Tracker] Homography initialized. PPM: {self.pixels_per_meter:.2f}")
+            except Exception as e:
+                print(f"[Tracker] Gagal init perspective: {e}")
+                self.perspective_matrix = None
+
+    # --- [BARU] Konversi Titik CCTV ke Titik Bird-Eye ---
+    def transform_to_birdseye(self, point):
+        if self.perspective_matrix is None:
+            return point # Fallback kalau belum init
+        
+        # Format input harus array 3D: (1, 1, 2)
+        pt_np = np.array([[[point[0], point[1]]]], dtype=np.float32)
+        warped = cv2.perspectiveTransform(pt_np, self.perspective_matrix)
+        return (float(warped[0][0][0]), float(warped[0][0][1]))
 
     def reset_completely(self):
         print(f"[{threading.current_thread().name}] RESETTING TRACKER COMPLETELY")
@@ -224,174 +255,170 @@ class SimpleObjectTracker:
             self.last_moved,
             self.first_seen,
             self.counted,
+            self.object_zone
         ]:
             d.pop(object_id, None)
 
     # 💡 PERBAIKAN: Terima config dan local_speed_data (pengganti TRACKED global)
     def update(self, detections, config, local_speed_data):
-        # Dapatkan konfigurasi garis & jarak dari dictionary config
+        # 1. Cek inisialisasi Perspektif (hanya sekali atau jika config berubah)
+        if self.perspective_matrix is None and "homography_src_pts" in config:
+            self.init_perspective(config["homography_src_pts"], config.get("real_width_m", 3.5))
+
         line1_y = config["line1_y"]
         line2_y = config["line2_y"]
-        pixel_distance = config["pixel_distance"]
-        real_distance_m = config["real_distance_m"]
 
         if len(detections) == 0:
             for object_id in list(self.disappeared.keys()):
                 self.disappeared[object_id] += 1
                 if self.disappeared[object_id] > self.max_disappeared:
                     self.deregister(object_id)
-                    local_speed_data.pop(
-                        object_id, None
-                    )  # 💡 Hapus dari data kecepatan lokal
+                    local_speed_data.pop(object_id, None)
             return self.objects
 
         if len(self.objects) == 0:
             for detection in detections:
                 self.register(detection)
             return self.objects
-        else:
-            object_ids = list(self.objects.keys())
-            used_detection_indices = set()
-            used_object_ids = set()
-            for detection_idx, detection in enumerate(detections):
-                min_distance = float("inf")
-                min_object_id = None
-                for object_id in object_ids:
-                    if object_id in used_object_ids:
-                        continue
-                    distance = self.calculate_distance(
-                        detection["center"], self.objects[object_id]["center"]
-                    )
-                    if distance < min_distance and distance < self.max_distance:
-                        min_distance = distance
-                        min_object_id = object_id
-                if min_object_id is not None:
-                    self.objects[min_object_id]["center"] = detection["center"]
-                    self.objects[min_object_id]["bbox"] = detection["bbox"]
-                    self.objects[min_object_id]["confidence"] = detection["confidence"]
-                    self.disappeared[min_object_id] = 0
 
-                    obj_id = min_object_id
-                    center_x, center_y = self.objects[obj_id]["center"]
-                    class_name = self.objects[obj_id]["class_name"]
+        # Matching Logic (Sama seperti sebelumnya)
+        object_ids = list(self.objects.keys())
+        used_detection_indices = set()
+        used_object_ids = set()
 
-                    self.history[obj_id].append((center_x, center_y, time.time()))
-
-                    # 💡 LOGIKA ZONA MENGGUNAKAN CONFIG DINAMIS
-                    l1_x1, l1_y1, l1_x2, l1_y2 = 0, line1_y, 600, line1_y
-                    l2_x1, l2_y1, l2_x2, l2_y2 = 0, line2_y, 600, line2_y
-
-                    side_1 = get_point_side(
-                        center_x, center_y, l1_x1, l1_y1, l1_x2, l1_y2
-                    )
-                    side_2 = get_point_side(
-                        center_x, center_y, l2_x1, l2_y1, l2_x2, l2_y2
-                    )
-
-                    current_zone = 0
-                    if side_1 > 0:
-                        current_zone = ZONE_JAUH
-                    elif side_1 < 0 and side_2 > 0:
-                        current_zone = ZONE_TENGAH
-                    elif side_2 < 0:
-                        current_zone = ZONE_DEKAT
-
-                    previous_zone = self.object_zone[obj_id]
-
-                    if current_zone != 0 and previous_zone != current_zone:
-
-                        if previous_zone == ZONE_DEKAT and current_zone == ZONE_TENGAH:
-                            self.object_zone[obj_id] = ZONE_TENGAH
-                        elif previous_zone == ZONE_TENGAH and current_zone == ZONE_JAUH:
-                            self.counts_menuju_jauh[class_name] += 1
-                            self.object_zone[obj_id] = ZONE_JAUH
-                            print(
-                                f"HITUNGAN (MENUJU JAUH) {class_name}: {self.counts_menuju_jauh[class_name]}"
-                            )
-
-                        elif previous_zone == ZONE_JAUH and current_zone == ZONE_TENGAH:
-                            self.object_zone[obj_id] = ZONE_TENGAH
-                        elif (
-                            previous_zone == ZONE_TENGAH and current_zone == ZONE_DEKAT
-                        ):
-                            self.counts_menuju_dekat[class_name] += 1
-                            self.object_zone[obj_id] = ZONE_DEKAT
-                            print(
-                                f"HITUNGAN (MENUJU DEKAT) {class_name}: {self.counts_menuju_dekat[class_name]}"
-                            )
-
-                        elif previous_zone == 0:
-                            self.object_zone[obj_id] = current_zone
-
-                    # --- KECEPATAN: Gunakan local_speed_data (HINDARI RACE CONDITION) ---
-                    obj_id = min_object_id
-                    center_y = self.objects[obj_id]["center"][1]
-
-                    if class_name in ["car", "motorcycle", "bus", "truck"]:
-
-                        # 💡 Gunakan local_speed_data
-                        if obj_id not in local_speed_data:
-                            local_speed_data[obj_id] = {
-                                "cx": center_x,
-                                "cy": center_y,
-                                "last_y": center_y,
-                                "timestamp": time.time(),
-                                "speed": 0.0,
-                            }
-
-                        else:
-                            # 💡 Gunakan local_speed_data
-                            dy = abs(center_y - local_speed_data[obj_id]["last_y"])
-
-                            if dy > 5:
-                                dt = time.time() - local_speed_data[obj_id]["timestamp"]
-
-                                if (
-                                    dt > 0 and pixel_distance > 0
-                                ):  # 💡 Gunakan pixel_distance dinamis
-                                    dist_meters = (
-                                        dy / pixel_distance
-                                    ) * real_distance_m  # 💡 Gunakan real_distance_m dinamis
-                                    speed_kmh = (dist_meters / dt) * 3.6
-                                    local_speed_data[obj_id]["speed"] = speed_kmh
-
-                                # update posisi terakhir
-                                local_speed_data[obj_id]["cx"] = center_x
-                                local_speed_data[obj_id]["cy"] = center_y
-                                local_speed_data[obj_id]["last_y"] = center_y
-                                local_speed_data[obj_id]["timestamp"] = time.time()
-                    # --- AKHIR KECEPATAN DARI REMOTE ---
-
-                    used_detection_indices.add(detection_idx)
-                    used_object_ids.add(min_object_id)
-
-            for detection_idx, detection in enumerate(detections):
-                if detection_idx not in used_detection_indices:
-                    self.register(detection)
-
-            current_time = time.time()
+        for detection_idx, detection in enumerate(detections):
+            min_distance = float("inf")
+            min_object_id = None
             for object_id in object_ids:
-                if object_id not in used_object_ids:
-                    self.disappeared[object_id] += 1
-                    if self.disappeared[object_id] > self.max_disappeared:
-                        self.deregister(object_id)
-                        local_speed_data.pop(
-                            object_id, None
-                        )  # 💡 Hapus dari data kecepatan lokal
+                if object_id in used_object_ids: continue
+                dist = self.calculate_distance(detection["center"], self.objects[object_id]["center"])
+                if dist < min_distance and dist < self.max_distance:
+                    min_distance = dist
+                    min_object_id = object_id
 
-                else:
-                    current_center = self.objects[object_id]["center"]
-                    prev_center = self.objects[object_id].get(
-                        "prev_center", current_center
-                    )
-                    move_dist = self.calculate_distance(current_center, prev_center)
-                    if move_dist > 5:
-                        self.last_moved[object_id] = current_time
-                        self.is_parked[object_id] = False
-                        self.is_odol_logged[object_id] = False
-                        self.plate_logged[object_id] = False
-                    self.objects[object_id]["prev_center"] = current_center
-            return self.objects
+            if min_object_id is not None:
+                # Update objek yang matched
+                self.objects[min_object_id]["center"] = detection["center"]
+                self.objects[min_object_id]["bbox"] = detection["bbox"]
+                self.objects[min_object_id]["confidence"] = detection["confidence"]
+                self.disappeared[min_object_id] = 0
+
+                obj_id = min_object_id
+                center_x, center_y = self.objects[obj_id]["center"]
+                class_name = self.objects[obj_id]["class_name"]
+                
+                self.history[obj_id].append((center_x, center_y, time.time()))
+
+                # --- LOGIKA COUNTING / ZONA (TIDAK BERUBAH DARI KODEMU) ---
+                side_1 = (center_x - 0) * (line1_y - line1_y) - (center_y - line1_y) * (600 - 0) # simplified
+                side_1 = get_point_side(center_x, center_y, 0, line1_y, 600, line1_y)
+                side_2 = get_point_side(center_x, center_y, 0, line2_y, 600, line2_y)
+
+                current_zone = 0
+                if side_1 > 0: current_zone = ZONE_JAUH
+                elif side_1 < 0 and side_2 > 0: current_zone = ZONE_TENGAH
+                elif side_2 < 0: current_zone = ZONE_DEKAT
+
+                previous_zone = self.object_zone[obj_id]
+                if current_zone != 0 and previous_zone != current_zone:
+                    if previous_zone == ZONE_DEKAT and current_zone == ZONE_TENGAH:
+                        self.object_zone[obj_id] = ZONE_TENGAH
+                    elif previous_zone == ZONE_TENGAH and current_zone == ZONE_JAUH:
+                        self.counts_menuju_jauh[class_name] += 1
+                        self.object_zone[obj_id] = ZONE_JAUH
+                    elif previous_zone == ZONE_JAUH and current_zone == ZONE_TENGAH:
+                        self.object_zone[obj_id] = ZONE_TENGAH
+                    elif previous_zone == ZONE_TENGAH and current_zone == ZONE_DEKAT:
+                        self.counts_menuju_dekat[class_name] += 1
+                        self.object_zone[obj_id] = ZONE_DEKAT
+                    elif previous_zone == 0:
+                        self.object_zone[obj_id] = current_zone
+
+                # --- LOGIKA KECEPATAN BARU (HOMOGRAPHY + SMOOTHING) ---
+                if class_name in ["car", "motorcycle", "bus", "truck"]:
+                    now_ts = time.time()
+                    
+                    # 1. Hitung posisi Bird-Eye View (Tampak Atas) saat ini
+                    curr_be_point = self.transform_to_birdseye((center_x, center_y))
+
+                    if obj_id not in local_speed_data:
+                        # Inisialisasi data kecepatan baru
+                        local_speed_data[obj_id] = {
+                            "birdseye_pos": curr_be_point, # Simpan posisi BE
+                            "last_y": center_y, # Tetap simpan ini untuk filter arah di worker
+                            "timestamp": now_ts,
+                            "speed": 0.0,
+                        }
+                    else:
+                        # Ambil data sebelumnya
+                        prev_data = local_speed_data[obj_id]
+                        prev_be_point = prev_data.get("birdseye_pos", curr_be_point)
+                        prev_ts = prev_data["timestamp"]
+                        
+                        dt = now_ts - prev_ts
+
+                        # Filter waktu agar tidak error pembagian nol
+                        if dt > 0.02: 
+                            # 2. Hitung Jarak Euclidean di Bird-Eye Space (Piksel)
+                            dx = curr_be_point[0] - prev_be_point[0]
+                            dy = curr_be_point[1] - prev_be_point[1]
+                            dist_px = math.hypot(dx, dy)
+
+                            # 3. Konversi ke Meter
+                            if self.pixels_per_meter:
+                                dist_m = dist_px / self.pixels_per_meter
+                            else:
+                                # Fallback ke metode lama kalau homography gagal init
+                                # Asumsi kasar 1 piksel BE ~ skala config lama (tidak akurat tapi jalan)
+                                pixel_dist_ref = config["pixel_distance"]
+                                real_dist_ref = config["real_distance_m"]
+                                dist_m = (dist_px / max(1, pixel_dist_ref)) * real_dist_ref
+
+                            # 4. Hitung Speed (km/h)
+                            speed_ms = dist_m / dt
+                            speed_kmh = speed_ms * 3.6
+
+                            # 5. Smoothing dengan Median (agar angka tidak loncat)
+                            self.speed_history[obj_id].append(speed_kmh)
+                            smoothed_speed = float(np.median(list(self.speed_history[obj_id])))
+                            
+                            # Simpan hasil
+                            local_speed_data[obj_id]["speed"] = smoothed_speed
+                            local_speed_data[obj_id]["birdseye_pos"] = curr_be_point
+                            local_speed_data[obj_id]["last_y"] = center_y
+                            local_speed_data[obj_id]["timestamp"] = now_ts
+
+                used_detection_indices.add(detection_idx)
+                used_object_ids.add(min_object_id)
+
+        # Register objek baru yang tidak match
+        for detection_idx, detection in enumerate(detections):
+            if detection_idx not in used_detection_indices:
+                self.register(detection)
+
+        # Handle objek menghilang
+        for object_id in object_ids:
+            if object_id not in used_object_ids:
+                self.disappeared[object_id] += 1
+                if self.disappeared[object_id] > self.max_disappeared:
+                    self.deregister(object_id)
+                    local_speed_data.pop(object_id, None)
+            else:
+                # Update prev_center untuk logika 'is_parked'
+                current_center = self.objects[object_id]["center"]
+                prev_center = self.objects[object_id].get("prev_center", current_center)
+                move_dist = self.calculate_distance(current_center, prev_center)
+                
+                # Reset status jika bergerak
+                if move_dist > 5:
+                    self.last_moved[object_id] = time.time()
+                    self.is_parked[object_id] = False
+                    self.is_odol_logged[object_id] = False
+                    self.plate_logged[object_id] = False
+                
+                self.objects[object_id]["prev_center"] = current_center
+
+        return self.objects
 
     def transform_point(self, point):
         # transform_point tidak akan digunakan lagi dengan speed calculation baru
@@ -1112,6 +1139,17 @@ def run_detection_worker(
         "line2_y": DEFAULT_LINE_2_Y,
         "real_distance_m": DEFAULT_REAL_DISTANCE,
         "pixel_distance": abs(DEFAULT_LINE_2_Y - DEFAULT_LINE_1_Y),
+        
+        # --- [TAMBAHAN BARU] Konfigurasi Homography ---
+        # 4 Titik Sudut Jalan (Kiri-Atas, Kanan-Atas, Kanan-Bawah, Kiri-Bawah)
+        # CONTOH: Kamu harus ganti angka ini sesuai video asli
+        "homography_src_pts": [
+            [200, 250],  # Titik 1: Kiri Atas (Jauh)
+            [440, 250],  # Titik 2: Kanan Atas (Jauh)
+            [580, 480],  # Titik 3: Kanan Bawah (Dekat)
+            [60, 480]    # Titik 4: Kiri Bawah (Dekat)
+        ],
+        "real_width_m": 7.0 # Lebar jalan asli (misal 2 lajur = 7 meter)
     }
 
     try:
